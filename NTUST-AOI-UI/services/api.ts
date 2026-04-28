@@ -49,6 +49,12 @@ export const api = {
         if (!response.ok) throw new Error('Failed to update config');
     },
 
+    getServicesStatus: async (): Promise<{ sync_service: string; monitor_service: string }> => {
+        const response = await fetch(`${API_BASE_URL}/services/status`);
+        if (!response.ok) return { sync_service: 'unknown', monitor_service: 'unknown' };
+        return response.json();
+    },
+
     // Helper to get image URL
     getImageUrl: (image: CapturedImage): string => {
         // Always use the proxy endpoint. The backend handles local vs cloud detection.
