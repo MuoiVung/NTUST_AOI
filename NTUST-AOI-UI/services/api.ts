@@ -1,6 +1,6 @@
 import { InspectionRun, CapturedImage, SystemConfig, Order, BoardNumber } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 export const api = {
     // Runs
@@ -51,9 +51,7 @@ export const api = {
 
     // Helper to get image URL
     getImageUrl: (image: CapturedImage): string => {
-        if (image.local_path) {
-            return `${API_BASE_URL}/images/proxy/${image.image_id}`;
-        }
-        return image.longterm_path || '';
+        // Always use the proxy endpoint. The backend handles local vs cloud detection.
+        return `${API_BASE_URL}/images/proxy/${image.image_id}`;
     }
 };

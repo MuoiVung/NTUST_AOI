@@ -114,9 +114,7 @@ export const inspectionService = {
                 id:       img.image_id,
                 position: `${img.side} (R${img.row_idx ?? 0}-C${img.col_idx ?? 0})`,
                 status:   mapStatus(img.condition),
-                imageUrl: img.local_path 
-                    ? `${getApiBaseUrl()}/images/proxy/${img.image_id}`
-                    : (img.longterm_path ?? ''),
+                imageUrl: `${getApiBaseUrl()}/images/proxy/${img.image_id}`,
                 region:   `${img.side} Zone ${img.row_idx ?? 0}-${img.col_idx ?? 0}`,
             })),
         };

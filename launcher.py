@@ -82,16 +82,30 @@ def monitor_ok():
     """Checks if folder_monitor.py is running by scanning the process list."""
     try:
         if IS_WINDOWS:
-            # tasklist /v is slow. wmic is faster but sometimes restricted.
             cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
             r = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATION_FLAGS)
             if r.returncode == 0 and r.stdout:
                 return "folder_monitor.py" in r.stdout
         else:
-            # macOS/Linux check
             r = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
             if r.returncode == 0 and r.stdout:
                 return "folder_monitor.py" in r.stdout
+        return False
+    except:
+        return False
+
+def sync_ok():
+    """Checks if sync_to_server.py is running."""
+    try:
+        if IS_WINDOWS:
+            cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
+            r = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATION_FLAGS)
+            if r.returncode == 0 and r.stdout:
+                return "sync_to_server.py" in r.stdout
+        else:
+            r = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout:
+                return "sync_to_server.py" in r.stdout
         return False
     except:
         return False
@@ -101,6 +115,7 @@ SERVICES = [
     ("db",       "🗄️", "Database & Nginx",  lambda: port_open(5433)),
     ("backend",  "⚡", "FastAPI Backend",    lambda: port_open(BACKEND_PORT)),
     ("monitor",  "📂", "Folder Monitor",    lambda: monitor_ok()),
+    ("sync",     "☁️", "Cloud Sync (MinIO)", lambda: sync_ok()),
     ("ui",       "🎨", "Vite UI Server",     lambda: port_open(UI_PORT)),
     ("browser",  "🌐", "Open Browser",       lambda: False),
 ]
@@ -445,20 +460,26 @@ class LauncherApp(tk.Tk):
         self._set_service("monitor", "running")
         self._set_status("Starting Folder Monitor…")
         if not monitor_ok():
-            self._log_write(f"Launching Folder Monitor: {FOLDER_MONITOR_PY}", "info")
             self._proc_monitor = subprocess.Popen(
                 [PYTHON_EXE, FOLDER_MONITOR_PY],
                 cwd=DB_DIR,
                 creationflags=CREATION_FLAGS
             )
-            time.sleep(2) # Give it a moment
-            if not monitor_ok():
-                self._log_write("WARN: Folder Monitor might not have started correctly.", "warn")
-        else:
-            self._log_write("Folder Monitor already running ✓", "ok")
-        
+            time.sleep(1)
         self._set_service("monitor", "ok")
-        self._log_write("Folder Monitor active (watching for images) ✓", "ok")
+
+        # 3.6 Cloud Sync
+        self._set_service("sync", "running")
+        self._set_status("Starting Cloud Sync…")
+        if not sync_ok():
+            sync_script = os.path.join(DB_DIR, "scripts", "sync_to_server.py")
+            self._proc_sync = subprocess.Popen(
+                [PYTHON_EXE, sync_script],
+                cwd=DB_DIR,
+                creationflags=CREATION_FLAGS
+            )
+            time.sleep(1)
+        self._set_service("sync", "ok")
 
         # 4. Vite UI
         self._set_service("ui", "running")
@@ -557,6 +578,22 @@ class LauncherApp(tk.Tk):
                 except: pass
         self._set_service("monitor", "idle")
         self._log_write("Folder Monitor stopped ✓", "ok")
+
+        # Kill Sync
+        if sync_ok():
+            self._log_write("Stopping Cloud Sync…", "warn")
+            self._set_service("sync", "stopping")
+            if IS_WINDOWS:
+                subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
+                               creationflags=CREATION_FLAGS)
+            else:
+                subprocess.run(['pkill', '-f', 'sync_to_server.py'])
+
+            if hasattr(self, '_proc_sync') and self._proc_sync:
+                try: self._proc_sync.terminate(); self._proc_sync.kill()
+                except: pass
+        self._set_service("sync", "idle")
+        self._log_write("Cloud Sync stopped ✓", "ok")
 
         # docker compose down
         self._log_write("Running docker compose down…", "warn")

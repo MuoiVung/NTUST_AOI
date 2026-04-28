@@ -7,8 +7,11 @@ from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from dotenv import load_dotenv
+from minio import Minio
+import io
+import mimetypes
 
 load_dotenv()
 
@@ -17,6 +20,20 @@ DB_PASS = os.getenv("DB_ROOT_PASSWORD", "aoi123!")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = os.getenv("DB_PORT", "5433")
 IMAGE_WATCH_DIR = os.getenv("IMAGE_WATCH_DIR", "/Users/namtranviet/Desktop/images")
+
+# MinIO Config
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "192.168.40.21:9000")
+MINIO_ACCESS = os.getenv("MINIO_ACCESS_KEY", "aoi_admin")
+MINIO_SECRET = os.getenv("MINIO_SECRET_KEY", "aoi@1234")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "aoi-images")
+MINIO_SECURE = os.getenv("MINIO_SECURE", "False").lower() == "true"
+
+minio_client = Minio(
+    MINIO_ENDPOINT,
+    access_key=MINIO_ACCESS,
+    secret_key=MINIO_SECRET,
+    secure=MINIO_SECURE
+)
 
 DB_DSN = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/pcb_aoi_db"
 
@@ -65,6 +82,7 @@ async def lifespan(app: FastAPI):
         _pool.closeall()
 
 app = FastAPI(title="AOI API", lifespan=lifespan)
+app.router.redirect_slashes = False
 
 app.add_middleware(
     CORSMiddleware,
@@ -175,31 +193,60 @@ def update_image(image_id: str, payload: dict = Body(...)):
 
 @app.get("/images/proxy/{image_id}")
 def proxy_image(image_id: str):
-    """Serves images directly from the local filesystem."""
+    """Serves images from local disk or fetches from MinIO if archived."""
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT local_path FROM images WHERE image_id = %s", (image_id,))
+            cur.execute("SELECT local_path, longterm_path, is_uploaded_longterm FROM images WHERE image_id = %s", (image_id,))
             row = cur.fetchone()
             if not row:
-                raise HTTPException(status_code=404, detail="Image not found")
-            file_path = row["local_path"]
+                raise HTTPException(status_code=404, detail="Image not found in database")
+            
+            local_path = row["local_path"]
+            longterm_path = row["longterm_path"]
+            is_cloud = row["is_uploaded_longterm"]
     finally:
         release_db_connection(conn)
 
-    if not file_path:
-        raise HTTPException(status_code=404, detail="Image has been moved to longterm storage (local_path is NULL)")
+    # 1. Try serving from LOCAL DISK first
+    if local_path:
+        abs_path = local_path if os.path.isabs(local_path) else os.path.join(IMAGE_WATCH_DIR, local_path)
+        if os.path.isfile(abs_path):
+            mime_type, _ = mimetypes.guess_type(abs_path)
+            return FileResponse(
+                path=abs_path,
+                media_type=mime_type or "image/jpeg",
+                filename=os.path.basename(abs_path),
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
 
-    abs_path = file_path if os.path.isabs(file_path) else os.path.join(IMAGE_WATCH_DIR, file_path)
+    # 2. If not on local disk, try fetching from MINIO
+    if is_cloud and longterm_path:
+        try:
+            parts = longterm_path.split('/', 1)
+            bucket = parts[0]
+            obj_name = parts[1]
+            
+            # Detect mime type from file extension on cloud
+            mime_type, _ = mimetypes.guess_type(obj_name)
+            
+            response = minio_client.get_object(bucket, obj_name)
+            data = response.read()
+            response.close()
+            response.release_conn()
+            
+            return Response(
+                content=data, 
+                media_type=mime_type or "image/jpeg",
+                headers={
+                    "Cache-Control": "max-age=3600",
+                    "Access-Control-Allow-Origin": "*"
+                }
+            )
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Error fetching from Cloud: {str(e)}")
 
-    if not os.path.isfile(abs_path):
-        raise HTTPException(status_code=404, detail=f"File not found on disk: {abs_path}")
-
-    return FileResponse(
-        path=abs_path,
-        media_type="image/jpeg",
-        filename=os.path.basename(abs_path),
-    )
+    raise HTTPException(status_code=404, detail="Image file not found locally or on Cloud")
 
 
 @app.get("/configs/")
