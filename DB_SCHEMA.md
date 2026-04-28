@@ -1,58 +1,139 @@
 # NTUST AOI — Database Schema Documentation
 
-Hệ thống sử dụng **PostgreSQL** làm cơ sở dữ liệu chính để quản lý dữ liệu kiểm tra. Dưới đây là cấu trúc chi tiết của các bảng.
+Hệ thống sử dụng **PostgreSQL** làm cơ sở dữ liệu tại chỗ (Local DB) trên máy AOI để quản lý vận hành và lưu trữ tạm thời trước khi đồng bộ sang hệ thống lưu trữ dài hạn (Longterm Storage).
 
 ---
 
-## 1. Bảng `runs` (Thông tin lượt chạy kiểm tra)
-Quản lý thông tin tổng quan của mỗi lần bo mạch đi qua hệ thống kiểm tra.
+## Phân tích Nghiệp vụ (2 Camera đồng thời)
+
+```
+Đơn hàng (Order Number)
+└── Mỗi PCB vật lý đi qua (Serial Number)
+    └── Một lượt quét (Run Number)
+        └── Sinh ra ảnh từ 2 Camera (Top & Bottom)
+```
+
+---
+
+## Chi tiết các bảng
+
+### Bảng 1: `orders` (Quản lý đơn hàng)
 
 | Cột | Kiểu dữ liệu | Mô tả |
 | :--- | :--- | :--- |
-| `run_code` **(PK)** | `VARCHAR(50)` | Mã định danh duy nhất cho mỗi lượt chạy (ví dụ: RUN_2024...). |
+| `order_number` **(PK)** | `VARCHAR(50)` | Mã đơn hàng (ví dụ: `ORD-20240428-001`). |
+| `target_quantity` | `INT` | Số lượng bo mạch cần sản xuất. |
+| `actual_quantity` | `INT` | Số lượng thực tế đã quét xong (Count từ bảng `runs`). |
+| `status` | `VARCHAR(20)` | Trạng thái (`ACTIVE`, `COMPLETED`, `CANCELLED`). |
+| `created_at` | `TIMESTAMP` | **Thời điểm tạo bản ghi đơn hàng trên hệ thống.** |
+
+---
+
+### Bảng 2: `board_numbers` (Công thức loại mạch - Recipe)
+
+| Cột | Kiểu dữ liệu | Mô tả |
+| :--- | :--- | :--- |
+| `board_number` **(PK)** | `VARCHAR(30)` | Mã loại mạch (ví dụ: `BN-5X5`, `BN-7X7`). |
+| `grid_rows` | `SMALLINT` | Số hàng trong lưới quét (Gửi xuống PLC). |
+| `grid_cols` | `SMALLINT` | Số cột trong lưới quét (Gửi xuống PLC). |
+| `created_at` | `TIMESTAMP` | Thời điểm tạo loại mạch. |
+
+---
+
+### Bảng 3: `runs` (Lượt kiểm tra PCB)
+
+| Cột | Kiểu dữ liệu | Mô tả |
+| :--- | :--- | :--- |
+| `run_number` **(PK)** | `VARCHAR(50)` | Mã lượt chạy (ví dụ: `RUN_20240428_114501`). |
+| `serial_number` | `VARCHAR(50)` | S/N của PCB vật lý. |
+| `board_number` **(FK)** | `VARCHAR(30)` | Tham chiếu tới `board_numbers`. |
+| `order_number` **(FK)** | `VARCHAR(50)` | Tham chiếu tới `orders`. |
 | `machine_id` | `VARCHAR(50)` | ID của máy thực hiện kiểm tra. |
-| `board_code` | `VARCHAR(20)` | Mã loại bo mạch hoặc số lô. |
-| `date_str` | `CHAR(8)` | Ngày kiểm tra định dạng `YYYYMMDD` (Dùng để filter nhanh). |
-| `side` | `VARCHAR(10)` | Mặt bo mạch (Top/Bottom). |
-| `illumination` | `VARCHAR(20)` | Cấu hình ánh sáng (ví dụ: "LRTB"). |
-| `status` | `VARCHAR(20)` | Trạng thái lượt chạy (`COMPLETED`, `PENDING`). Mặc định: `COMPLETED`. |
-| `note` | `TEXT` | Ghi chú tổng quát về lượt chạy. |
-| `start_time` | `TIMESTAMP` | Thời điểm bắt đầu thực tế. |
-| `created_at` | `TIMESTAMP` | Thời điểm bản ghi được tạo (Hệ thống tự động). |
-
-**Chỉ mục (Indexes):**
-*   `idx_runs_date`: Tối ưu hóa việc lọc theo ngày.
-*   `idx_runs_board_date`: Tối ưu hóa việc tìm kiếm lượt chạy mới nhất của một loại bo cụ thể.
+| `status` | `VARCHAR(20)` | Trạng thái (`COMPLETED`, `PENDING`). |
+| `start_time` | `TIMESTAMP` | Thời điểm bắt đầu quét. |
+| `created_at` | `TIMESTAMP` | Thời điểm tạo bản ghi lượt chạy. |
 
 ---
 
-## 2. Bảng `images` (Thông tin ảnh chụp chi tiết)
-Lưu trữ thông tin về từng ảnh chụp được trong mỗi lượt chạy.
+### Bảng 4: `images` (Ảnh chụp chi tiết - 2 Camera)
 
 | Cột | Kiểu dữ liệu | Mô tả |
 | :--- | :--- | :--- |
-| `image_id` **(PK)** | `UUID` | ID định danh duy nhất (Tự động tạo bằng `uuid-ossp`). |
-| `run_code` **(FK)** | `VARCHAR(50)` | Liên kết tới bảng `runs`. |
-| `file_path` | `TEXT` | Đường dẫn tuyệt đối đến file ảnh trên ổ đĩa. |
-| `row_idx` | `INTEGER` | Vị trí hàng trong lưới quét (Grid). |
-| `col_idx` | `INTEGER` | Vị trí cột trong lưới quét (Grid). |
-| `condition` | `VARCHAR(10)` | Kết quả kiểm tra ảnh (`PASS`, `FAIL`, `PENDING`). |
-| `capture_time` | `TIMESTAMP` | Thời điểm máy ảnh chụp file này. |
-| `file_name` | `VARCHAR(255)` | Tên file gốc. |
-| `file_size_bytes` | `BIGINT` | Dung lượng file (Dùng để kiểm tra tính toàn vẹn). |
-| `checksum` | `VARCHAR(64)` | Mã băm file (Tùy chọn, dùng để tránh trùng lặp). |
-| `note` | `TEXT` | Ghi chú riêng cho từng ảnh (ví dụ: mô tả lỗi cụ thể). |
-
-**Ràng buộc (Constraints):**
-*   `fk_run`: Khóa ngoại liên kết với `runs(run_code)`. Khi một `run` bị xóa, toàn bộ `images` liên quan sẽ tự động bị xóa (`ON DELETE CASCADE`).
-
-**Chỉ mục (Indexes):**
-*   `idx_images_run_code`: Tối ưu hóa việc tải nhanh danh sách ảnh của một lượt chạy.
-*   `idx_images_condition`: Hỗ trợ thống kê nhanh số lượng ảnh Pass/Fail.
+| `image_id` **(PK)** | `UUID` | ID định danh duy nhất (tự động tạo). |
+| `run_number` **(FK)** | `VARCHAR(50)` | Liên kết tới bảng `runs`. |
+| `side` | `VARCHAR(10)` | Mặt bo mạch (`Top` hoặc `Bottom`). |
+| `local_path` | `TEXT` | Đường dẫn ảnh tại máy AOI. Sẽ bị xóa (NULL) sau khi đẩy sang máy dài hạn. |
+| `longterm_path` | `TEXT` | Đường dẫn ảnh trên máy lưu trữ dài hạn (Longterm Storage). |
+| `is_uploaded_longterm` | `BOOLEAN` | Mặc định `false`. Chuyển thành `true` khi đã upload thành công. |
+| `row_idx` | `INTEGER` | Vị trí hàng trong lưới. |
+| `col_idx` | `INTEGER` | Vị trí cột trong lưới. |
+| `condition` | `VARCHAR(10)` | Kết quả (`PASS`, `FAIL`). |
+| `file_size_bytes` | `BIGINT` | Dung lượng file ảnh. |
+| `capture_time` | `TIMESTAMP` | Thời điểm camera chụp bức ảnh này. |
 
 ---
 
-## 3. Thông số kết nối (Docker)
-*   **Port nội bộ:** `5432`
-*   **Port công khai:** `5433` (Dùng port này khi kết nối từ bên ngoài Docker)
-*   **Database Name:** `pcb_aoi_db`
+### Bảng 5: `system_configs` (Cấu hình hệ thống)
+
+| Cột | Kiểu dữ liệu | Mô tả |
+| :--- | :--- | :--- |
+| **`config_key` (PK)** | `SERIAL` | Khóa chính tự động tăng. |
+| `config_name` | `VARCHAR(100)` | Tên thông số cấu hình. |
+| `config_value` | `TEXT` | Giá trị cài đặt. |
+| `unit` | `VARCHAR(20)` | Đơn vị tính (Phút, Ngày, %). |
+
+**Thông số cấu hình quan trọng:**
+1.  **`local_retention_period`**: Khoảng thời gian ảnh lưu tại máy Local trước khi đẩy sang máy dài hạn (ví dụ: `30` đơn vị `Ngày`).
+2.  **`sync_retry_interval`**: Thời gian thử lại nếu upload sang máy dài hạn thất bại (ví dụ: `5` đơn vị `Phút`).
+
+---
+
+## Sơ đồ quan hệ (ERD)
+
+```mermaid
+erDiagram
+    orders ||--o{ runs : "gồm nhiều"
+    board_numbers ||--o{ runs : "xác định kịch bản"
+    runs ||--o{ images : "sinh ra"
+    
+    orders {
+        VARCHAR order_number PK
+        INT target_quantity
+        INT actual_quantity
+        TIMESTAMP created_at
+    }
+    board_numbers {
+        VARCHAR board_number PK
+        SMALLINT grid_rows
+        SMALLINT grid_cols
+    }
+    runs {
+        VARCHAR run_number PK
+        VARCHAR serial_number
+    }
+    images {
+        UUID image_id PK
+        VARCHAR side
+        BOOLEAN is_uploaded_longterm
+        TEXT local_path
+        TEXT longterm_path
+    }
+    system_configs {
+        SERIAL config_key PK
+        VARCHAR config_name
+        TEXT config_value
+    }
+```
+
+---
+
+## Quy tắc lưu trữ và Đặt tên File (Naming Convention)
+
+Để đảm bảo tính hệ thống và dễ dàng tra cứu, cấu trúc thư mục và tên file được quy định như sau:
+
+- **Local Storage**: `{local_root}/{order_number}/{serial_number}/{side}/{row}_{col}.jpg`
+- **Longterm Storage**: `{longterm_root}/{order_number}/{serial_number}/{side}/{row}_{col}.jpg`
+
+**Ví dụ:**
+- Máy AOI: `D:/Images/ORD-001/SN-999/Top/1_1.jpg`
+- Máy Dài hạn: `http://192.168.1.100:9000/archive/ORD-001/SN-999/Top/1_1.jpg`
