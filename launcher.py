@@ -9,7 +9,7 @@ from tkinter import scrolledtext
 import subprocess, threading, time, os, sys, webbrowser, socket
 
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
-BASE_DIR       = r"C:\Users\OMNI-3125HTT-ADN\Desktop\ntust_aoi"
+BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 DB_DIR         = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR         = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 PYTHON_EXE     = r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe"
