@@ -136,4 +136,4 @@ erDiagram
 
 **Ví dụ:**
 - Máy AOI: `D:/Images/ORD-001/SN-999/Top/1_1.jpg`
-- Máy Dài hạn: `http://192.168.1.100:9000/archive/ORD-001/SN-999/Top/1_1.jpg`
+- Máy Dài hạn: `http://192.168.40.21:9000/archive/ORD-001/SN-999/Top/1_1.jpg`
