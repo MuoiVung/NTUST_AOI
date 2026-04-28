@@ -1,4 +1,4 @@
-import { DashboardMetrics, InspectionRun, RunDetail, Alert, InspectionStatus } from "../types";
+import { DashboardMetrics, InspectionRun, RunDetail, Alert, InspectionStatus, SystemConfig } from "../types";
 import { MOCK_ALERTS, MOCK_METRICS } from "./mockData";
 
 // ─── API Base URLs ────────────────────────────────────────────────────────────
@@ -8,30 +8,28 @@ const getApiBaseUrl = (): string =>
 
 // ─── Typed API Response Shapes ────────────────────────────────────────────────
 interface RunApiResponse {
-    run_code: string;
+    run_number: string;
+    serial_number: string;
+    board_number: string;
+    order_number: string;
     machine_id: string;
-    board_code: string;
-    date_str: string;
-    side?: string;
-    illumination?: string;
-    status: string;        // 'PASS' | 'FAIL' | 'PENDING' | 'COMPLETED' in DB
-    result?: string;       // mapped alias set by backend
-    note?: string;
+    status: string;
     start_time?: string;
     created_at?: string;
 }
 
 interface ImageApiResponse {
     image_id: string;
-    run_code: string;
-    file_path: string;
-    file_name?: string;
+    run_number: string;
+    side: 'Top' | 'Bottom';
+    local_path: string | null;
+    longterm_path: string | null;
+    is_uploaded_longterm: boolean;
     row_idx?: number;
     col_idx?: number;
-    condition?: string;    // 'PASS' | 'FAIL' | 'PENDING' | 'UNKNOWN'
+    condition?: string;
     capture_time?: string;
     file_size_bytes?: number;
-    note?: string;
 }
 
 // ─── Status Mapping ───────────────────────────────────────────────────────────
@@ -39,7 +37,7 @@ const STATUS_MAP: Record<string, InspectionStatus> = {
     PASS:      InspectionStatus.PASS,
     FAIL:      InspectionStatus.FAIL,
     PENDING:   InspectionStatus.PENDING,
-    COMPLETED: InspectionStatus.PASS,   // legacy DB status
+    COMPLETED: InspectionStatus.PASS,
     UNKNOWN:   InspectionStatus.PENDING,
 };
 
@@ -61,71 +59,83 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 export const inspectionService = {
 
     getDashboardMetrics: async (): Promise<DashboardMetrics> => {
-        // TODO: replace with real endpoint /stats once backend supports it
         return new Promise(resolve => setTimeout(() => resolve(MOCK_METRICS), 300));
     },
 
     getRecentAlerts: async (): Promise<Alert[]> => {
-        // TODO: replace with real endpoint once backend supports it
         return new Promise(resolve => setTimeout(() => resolve(MOCK_ALERTS), 300));
     },
 
     getInspectionRuns: async (filters?: {
-        board_code?: string;
-        result?: string;
-        date_str?: string;
-        illumination?: string;
+        board_number?: string;
+        order_number?: string;
+        status?: string;
+        serial_number?: string;
     }): Promise<InspectionRun[]> => {
         const params = new URLSearchParams({ limit: '50' });
-        if (filters?.board_code)  params.append('board_code',  filters.board_code);
-        if (filters?.result)      params.append('result',      filters.result);
-        if (filters?.date_str)    params.append('date_str',    filters.date_str);
-        if (filters?.illumination) params.append('illumination', filters.illumination);
+        if (filters?.board_number)  params.append('board_number',  filters.board_number);
+        if (filters?.order_number)  params.append('order_number',  filters.order_number);
+        if (filters?.status)        params.append('status',        filters.status);
+        if (filters?.serial_number) params.append('serial_number', filters.serial_number);
 
         const data = await apiFetch<RunApiResponse[]>(`/runs/?${params}`);
 
         return data.map(run => ({
-            id:           run.run_code,
+            run_number:    run.run_number,
+            serial_number: run.serial_number,
+            board_number:  run.board_number,
+            order_number:  run.order_number,
             timestamp:    run.created_at ?? run.start_time ?? '',
-            pcbSerial:    run.board_code,
-            result:       mapStatus(run.result ?? run.status),
-            operator:     run.machine_id,
-            defectType:   run.note,
-            illumination: run.illumination,
+            status:       run.status,
+            machine_id:   run.machine_id,
+            start_time:   run.start_time ?? '',
+            created_at:   run.created_at ?? '',
         }));
     },
 
-    getRunDetail: async (runId: string, limit = 24, offset = 0): Promise<RunDetail> => {
+    getRunDetail: async (runNumber: string, limit = 50, offset = 0): Promise<RunDetail> => {
         const [runData, imagesData] = await Promise.all([
-            apiFetch<RunApiResponse>(`/runs/${runId}`),
+            apiFetch<RunApiResponse>(`/runs/${runNumber}`),
             apiFetch<ImageApiResponse[]>(
-                `/images/?run_code=${runId}&limit=${limit}&offset=${offset}`
+                `/images/?run_number=${runNumber}&limit=${limit}&offset=${offset}`
             ),
         ]);
 
         return {
-            runId:       runData.run_code,
-            batchId:     runData.board_code,
+            runId:       runData.run_number,
+            batchId:     runData.board_number,
             line:        runData.machine_id,
             startTime:   runData.start_time ?? '',
             endTime:     runData.created_at ?? '',
             totalBoards: 1,
             defectRate:  0,
             operator:    runData.machine_id,
-            illumination: runData.illumination,
             images: imagesData.map(img => ({
                 id:       img.image_id,
-                position: `R${img.row_idx ?? 0}-C${img.col_idx ?? 0}`,
+                position: `${img.side} (R${img.row_idx ?? 0}-C${img.col_idx ?? 0})`,
                 status:   mapStatus(img.condition),
-                imageUrl: `${getApiBaseUrl()}/images/proxy/${img.image_id}`,
-                label:    img.file_name,
-                region:   `Zone ${img.row_idx ?? 0}-${img.col_idx ?? 0}`,
-                note:     img.note,
+                imageUrl: img.local_path 
+                    ? `${getApiBaseUrl()}/images/proxy/${img.image_id}`
+                    : (img.longterm_path ?? ''),
+                region:   `${img.side} Zone ${img.row_idx ?? 0}-${img.col_idx ?? 0}`,
             })),
         };
     },
 
-    updateImage: async (imageId: string, update: { condition?: string; note?: string }): Promise<void> => {
+    // Configs
+    getConfigs: async (): Promise<SystemConfig[]> => {
+        return apiFetch<SystemConfig[]>('/configs/');
+    },
+
+    updateConfig: async (configName: string, configValue: string): Promise<void> => {
+        await apiFetch(`/configs/${configName}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config_value: configValue }),
+        });
+    },
+
+    updateImage: async (imageId: string, update: { condition?: string }): Promise<void> => {
         await apiFetch(`/images/${imageId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -133,22 +143,7 @@ export const inspectionService = {
         });
     },
 
-    updateRun: async (
-        runId: string,
-        update: { illumination?: string; note?: string; board_code?: string }
-    ): Promise<void> => {
-        await apiFetch(`/runs/${runId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(update),
-        });
-    },
-
-    deleteImage: async (imageId: string): Promise<void> => {
-        await apiFetch(`/images/${imageId}`, { method: 'DELETE' });
-    },
-
-    deleteRun: async (runId: string): Promise<void> => {
-        await apiFetch(`/runs/${runId}`, { method: 'DELETE' });
+    deleteRun: async (runNumber: string): Promise<void> => {
+        await apiFetch(`/runs/${runNumber}`, { method: 'DELETE' });
     },
 };

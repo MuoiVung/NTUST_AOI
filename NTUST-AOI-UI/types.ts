@@ -14,45 +14,49 @@ export interface DashboardMetrics {
     throughputData: { time: string; value: number }[];
 }
 
-export interface Alert {
-    id: string;
-    code: string;
-    type: string;
-    time: string;
-    lane: string;
-    severity: 'critical' | 'warning' | 'info';
+export interface Order {
+    order_number: string;
+    target_quantity: number;
+    actual_quantity: number;
+    status: string;
+    created_at: string;
+}
+
+export interface BoardNumber {
+    board_number: string;
+    grid_rows: number;
+    grid_cols: number;
+    created_at: string;
 }
 
 export interface InspectionRun {
-    id: string;
-    timestamp: string;
-    pcbSerial: string;
-    result: InspectionStatus;
-    defectType?: string;
-    operator: string;
-    illumination?: string;
-    thumbnailUrl?: string;
+    run_number: string;
+    serial_number: string;
+    board_number: string;
+    order_number: string;
+    machine_id: string;
+    status: string;
+    start_time: string;
+    created_at: string;
 }
 
 export interface CapturedImage {
-    id: string;
-    imageUrl: string;
-    position: string; // e.g., "A-01"
-    status: InspectionStatus;
-    label?: string; // e.g., "Missing Component"
-    region: string; // e.g., "Region B-4"
-    note?: string;
+    image_id: string;
+    run_number: string;
+    side: 'Top' | 'Bottom';
+    local_path: string | null;
+    longterm_path: string | null;
+    is_uploaded_longterm: boolean;
+    row_idx: number;
+    col_idx: number;
+    condition: InspectionStatus;
+    file_size_bytes: number;
+    capture_time: string;
 }
 
-export interface RunDetail {
-    runId: string;
-    batchId: string;
-    line: string;
-    startTime: string;
-    endTime: string;
-    totalBoards: number;
-    defectRate: number;
-    operator: string;
-    illumination?: string;
-    images: CapturedImage[];
+export interface SystemConfig {
+    config_key: number;
+    config_name: string;
+    config_value: string;
+    unit: string;
 }

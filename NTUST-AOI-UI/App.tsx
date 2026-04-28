@@ -3,13 +3,15 @@ import { RunList } from './components/RunList';
 import { RunGallery } from './components/RunGallery';
 import { EditRun } from './components/EditRun';
 import { NewInspection } from './components/NewInspection';
+import { Settings } from './components/Settings';
 import { IMAGES } from './services/mockData';
 
 enum View {
     RUN_LIST = 'RUN_LIST',
     RUN_DETAIL = 'RUN_DETAIL',
     RUN_EDIT = 'RUN_EDIT',
-    NEW_INSPECTION = 'NEW_INSPECTION'
+    NEW_INSPECTION = 'NEW_INSPECTION',
+    SETTINGS = 'SETTINGS'
 }
 
 const Sidebar = ({
@@ -61,10 +63,7 @@ const Sidebar = ({
                 </div>
                 <nav className="flex flex-col gap-2">
                     <NavItem view={View.RUN_LIST} icon="dashboard" label="Dashboard" />
-                    <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 group transition-colors w-full" title={isCollapsed ? "Settings" : ""}>
-                        <span className="material-symbols-outlined text-slate-900 dark:text-slate-300 group-hover:text-primary shrink-0">settings</span>
-                        {!isCollapsed && <p className="text-slate-900 dark:text-slate-300 text-sm font-medium leading-normal whitespace-nowrap overflow-hidden transition-all duration-300">Settings</p>}
-                    </button>
+                    <NavItem view={View.SETTINGS} icon="settings" label="Settings" />
                 </nav>
             </div>
             <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 mt-auto border-t border-slate-200 dark:border-slate-800 pt-4 overflow-hidden`}>
@@ -110,6 +109,8 @@ export default function App() {
                     : <RunList onViewDetail={handleViewDetail} onCreate={() => setCurrentView(View.NEW_INSPECTION)} />;
             case View.NEW_INSPECTION:
                 return <NewInspection onSave={() => setCurrentView(View.RUN_LIST)} onCancel={() => setCurrentView(View.RUN_LIST)} />;
+            case View.SETTINGS:
+                return <Settings />;
             default:
                 return <RunList onViewDetail={handleViewDetail} onCreate={() => setCurrentView(View.NEW_INSPECTION)} />;
         }
