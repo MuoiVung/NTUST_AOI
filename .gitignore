@@ -22,6 +22,7 @@ backend_error.log
 
 # Local env files
 **/*.local
+**/.env
 
 # Database data
 **/postgres_data/
