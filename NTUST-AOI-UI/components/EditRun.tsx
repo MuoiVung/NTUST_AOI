@@ -1,37 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { inspectionService } from '../services/inspectionService';
 import { InspectionStatus, RunDetail, CapturedImage } from '../types';
+import { parseIllumination, serializeIllumination } from '../utils/formatters';
 
 export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: () => void, onCancel: () => void }) => {
     const [detail, setDetail] = useState<RunDetail | null>(null);
     const [localImages, setLocalImages] = useState<CapturedImage[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [illumination, setIllumination] = useState('');
+    const [illuminationCodes, setIlluminationCodes] = useState<string[]>([]);
     const [boardCode, setBoardCode] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        inspectionService.getRunDetail(runId).then(data => {
+        // Fetch all images (large limit) so bulk edits capture the full run
+        inspectionService.getRunDetail(runId, 500, 0).then(data => {
             setDetail(data);
             setLocalImages(data.images);
-            setIllumination(data.illumination || '');
+            setIlluminationCodes(parseIllumination(data.illumination));
             setBoardCode(data.batchId || '');
         });
     }, [runId]);
 
     const toggleIllumination = (code: string) => {
-        // Normalize: if contains comma, split by comma; if not, split into characters
-        let parts = illumination.includes(',')
-            ? illumination.split(',').map(s => s.trim())
-            : illumination.split('').map(s => s.trim());
-
-        parts = parts.filter(Boolean);
-
-        const next = parts.includes(code)
-            ? parts.filter(p => p !== code)
-            : [...parts, code];
-
-        setIllumination(next.join(', '));
+        setIlluminationCodes(prev =>
+            prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+        );
     };
 
     const handleStatusChange = (imageId: string, newStatus: InspectionStatus) => {
@@ -67,8 +60,8 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
                 await inspectionService.deleteImage(id);
                 setLocalImages(prev => prev.filter(img => img.id !== id));
                 setSelectedIds(prev => prev.filter(i => i !== id));
-            } catch (error) {
-                alert('Failed to delete image');
+            } catch {
+                alert('Failed to delete image. Please try again.');
             }
         }
     };
@@ -76,29 +69,33 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // Update Run Metadata if illumination or board_code changed
-            const runUpdates: any = {};
-            if (illumination !== (detail?.illumination || '')) runUpdates.illumination = illumination;
+            // Update run metadata only if something changed
+            const newIllumination = serializeIllumination(illuminationCodes);
+            const runUpdates: Record<string, string> = {};
+            if (newIllumination !== (detail?.illumination || '')) runUpdates.illumination = newIllumination;
             if (boardCode !== (detail?.batchId || '')) runUpdates.board_code = boardCode;
 
             if (Object.keys(runUpdates).length > 0) {
                 await inspectionService.updateRun(runId, runUpdates);
             }
 
-            const originalImages = detail?.images || [];
-            const updates = localImages.filter(localImg => {
+            // Only push image updates where status actually changed
+            const originalImages = detail?.images ?? [];
+            const changedImages = localImages.filter(localImg => {
                 const original = originalImages.find(o => o.id === localImg.id);
                 return original && original.status !== localImg.status;
             });
 
-            await Promise.all(updates.map(img =>
-                inspectionService.updateImage(img.id, { condition: img.status })
-            ));
+            await Promise.all(
+                changedImages.map(img =>
+                    inspectionService.updateImage(img.id, { condition: img.status })
+                )
+            );
 
             onSave();
         } catch (error) {
             console.error(error);
-            alert('Error saving changes');
+            alert('Error saving changes. Please check your connection and try again.');
         } finally {
             setIsSaving(false);
         }
@@ -107,10 +104,10 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
     if (!detail) return <div className="p-10 font-medium">Loading Run Data...</div>;
 
     const StatusSelect = ({ current, onChange }: { current: InspectionStatus, onChange: (v: InspectionStatus) => void }) => {
-        const colors = {
-            [InspectionStatus.PASS]: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
-            [InspectionStatus.FAIL]: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
-            [InspectionStatus.PENDING]: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800'
+        const colors: Record<InspectionStatus, string> = {
+            [InspectionStatus.PASS]:    'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800',
+            [InspectionStatus.FAIL]:    'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
+            [InspectionStatus.PENDING]: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800',
         };
 
         return (
@@ -118,7 +115,7 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
                 <select
                     value={current}
                     onChange={(e) => onChange(e.target.value as InspectionStatus)}
-                    className={`w-full ${colors[current] || ''} text-sm font-bold rounded-lg py-2 pl-3 pr-8 cursor-pointer focus:ring-2 focus:ring-offset-1 appearance-none border transition-colors`}
+                    className={`w-full ${colors[current] ?? ''} text-sm font-bold rounded-lg py-2 pl-3 pr-8 cursor-pointer focus:ring-2 focus:ring-offset-1 appearance-none border transition-colors`}
                 >
                     <option value={InspectionStatus.PENDING}>Pending</option>
                     <option value={InspectionStatus.PASS}>Pass</option>
@@ -174,9 +171,7 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Light</span>
                             <div className="flex gap-1">
                                 {['L', 'R', 'T', 'B'].map(light => {
-                                    const isActive = illumination.includes(',')
-                                        ? illumination.split(',').map(s => s.trim()).includes(light)
-                                        : illumination.split('').includes(light);
+                                    const isActive = illuminationCodes.includes(light);
                                     return (
                                         <button
                                             key={light}

@@ -19,7 +19,7 @@ load_dotenv()
 DB_USER = os.getenv("DB_ROOT_USER")
 DB_PASSWORD = os.getenv("DB_ROOT_PASSWORD")
 DB_HOST = os.getenv("DB_HOST", "localhost")  # Use localhost for direct script execution, or "postgres" if running inside Docker
-DB_PORT = os.getenv("DB_PORT", "5432")
+DB_PORT = os.getenv("DB_PORT", "5433")  # Docker exposes PostgreSQL on 5433
 DB_NAME = "pcb_aoi_db"
 
 # Folder Monitoring Config
@@ -81,9 +81,11 @@ def insert_image_record(file_path, file_name, file_size):
             # As requested: Store the absolute path in the database
             logical_path = os.path.abspath(file_path)
             
-            # Generate random mock data for grid position (4x4 grid)
-            row_idx = random.randint(0, 3)
-            col_idx = random.randint(0, 3)
+            # TODO: parse row_idx / col_idx from file_name or folder structure
+            # e.g. file name format: "R2_C3_20240101.jpg" -> row_idx=2, col_idx=3
+            # For now, use 0,0 as placeholder rather than random values
+            row_idx = 0
+            col_idx = 0
             
             insert_img_sql = """
             INSERT INTO images (run_code, file_path, file_name, file_size_bytes, capture_time, condition, row_idx, col_idx)

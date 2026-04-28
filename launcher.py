@@ -6,14 +6,24 @@ On re-open: auto-detects which services are already running.
 
 import tkinter as tk
 from tkinter import scrolledtext
-import subprocess, threading, time, os, sys, webbrowser, socket
+import subprocess, threading, time, os, sys, webbrowser, socket, shutil
 
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 DB_DIR         = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR         = os.path.join(BASE_DIR, "NTUST-AOI-UI")
-PYTHON_EXE     = r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe"
-NPM_EXE        = r"C:\Program Files\nodejs\npm.cmd"
+# Auto-detect Python: prefer the running interpreter, then PATH, then a known fallback.
+PYTHON_EXE = (
+    sys.executable
+    or shutil.which("python")
+    or shutil.which("python3")
+    or r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe"
+)
+# Auto-detect npm from PATH, fallback to a known Windows location.
+NPM_EXE = (
+    shutil.which("npm")
+    or r"C:\Program Files\nodejs\npm.cmd"
+)
 DOCKER_DESKTOP = r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
 FOLDER_MONITOR_PY = os.path.join(DB_DIR, "scripts", "folder_monitor.py")

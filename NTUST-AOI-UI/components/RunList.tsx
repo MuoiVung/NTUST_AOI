@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { inspectionService } from '../services/inspectionService';
 import { InspectionRun, InspectionStatus } from '../types';
+import { formatTimestamp, parseIllumination } from '../utils/formatters';
 
 export const RunList = ({ onViewDetail, onCreate }: { onViewDetail: (id: string) => void, onCreate: () => void }) => {
     const [runs, setRuns] = useState<InspectionRun[]>([]);
@@ -10,7 +11,7 @@ export const RunList = ({ onViewDetail, onCreate }: { onViewDetail: (id: string)
     const [illuminationFilters, setIlluminationFilters] = useState<string[]>([]);
 
     const fetchRuns = () => {
-        const filters: any = {};
+        const filters: Parameters<typeof inspectionService.getInspectionRuns>[0] = {};
         if (statusFilter !== 'All') filters.result = statusFilter;
         if (boardFilter) filters.board_code = boardFilter;
         if (dateFilter) filters.date_str = dateFilter.replace(/-/g, ''); // Format YYYYMMDD
@@ -22,23 +23,6 @@ export const RunList = ({ onViewDetail, onCreate }: { onViewDetail: (id: string)
     useEffect(() => {
         fetchRuns();
     }, [statusFilter, boardFilter, dateFilter, illuminationFilters]);
-
-    const formatTimestamp = (ts: string) => {
-        try {
-            const date = new Date(ts);
-            return date.toLocaleString('zh-TW', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-        } catch (e) {
-            return ts;
-        }
-    };
 
     const toggleIllumination = (code: string) => {
         setIlluminationFilters(prev =>
@@ -61,12 +45,7 @@ export const RunList = ({ onViewDetail, onCreate }: { onViewDetail: (id: string)
     };
 
     const IlluminationBadges = ({ illumination }: { illumination?: string }) => {
-        if (!illumination) return <span className="text-slate-400">-</span>;
-
-        // Split by comma or parse characters
-        const activeChars = illumination.includes(',')
-            ? illumination.split(',').map(s => s.trim().toUpperCase())
-            : illumination.toUpperCase().split('').filter(s => s.trim());
+        const activeChars = parseIllumination(illumination);
 
         return (
             <div className="flex gap-1">
@@ -228,8 +207,12 @@ export const RunList = ({ onViewDetail, onCreate }: { onViewDetail: (id: string)
                                                 <button onClick={async (e) => {
                                                     e.stopPropagation();
                                                     if (confirm('Are you sure you want to delete this run?')) {
-                                                        await inspectionService.deleteRun(run.id);
-                                                        setRuns(prev => prev.filter(r => r.id !== run.id));
+                                                        try {
+                                                            await inspectionService.deleteRun(run.id);
+                                                            setRuns(prev => prev.filter(r => r.id !== run.id));
+                                                        } catch {
+                                                            alert('Failed to delete run. Please try again.');
+                                                        }
                                                     }
                                                 }} className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-900/20 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
                                                     <span className="material-symbols-outlined text-[16px]">delete</span>

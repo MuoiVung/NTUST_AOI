@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { inspectionService } from '../services/inspectionService';
 import { InspectionStatus, RunDetail, CapturedImage } from '../types';
 import { ImageViewer } from './ImageViewer';
+import { formatTimestamp } from '../utils/formatters';
 
 const PAGE_SIZE = 24;
 
@@ -56,15 +57,7 @@ export const RunGallery = ({ runId, onEdit, onBack }: { runId: string, onEdit: (
         setSelectedImage(updatedImage);
     };
 
-    const formatTimestamp = (ts: string) => {
-        try {
-            const date = new Date(ts);
-            return date.toLocaleString('zh-TW', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-            });
-        } catch (e) { return ts; }
-    };
+
 
     if (!detail && offset === 0) return <div className="p-10">Loading Details...</div>;
     if (!detail) return null;
