@@ -1,5 +1,5 @@
 # Logs
-*.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -8,43 +8,43 @@ lerna-debug.log*
 backend_error.log
 
 # Dependency directories
-node_modules/
-venv/
-.venv/
-env/
-.env/
-__pycache__/
+**/node_modules/
+**/venv/
+**/.venv/
+**/env/
+**/.env/
+**/__pycache__/
 
 # Build/Dist
-build/
-dist/
-dist-ssr/
-*.spec
+**/build/
+**/dist/
+**/dist-ssr/
+**/*.spec
 
 # Local env files
-.env
-.env.local
-*.local
+**/.env
+**/.env.local
+**/*.local
 
 # Database data
-postgres_data/
-mongo_data/
+**/postgres_data/
+**/mongo_data/
 
 # AOI specific
-images/
-reports/
+**/images/
+**/reports/
 
 # Editor/System directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
+**/.vscode/*
+!**/.vscode/extensions.json
+**/.idea/
+**/.DS_Store
 Thumbs.db
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+**/*.suo
+**/*.ntvs*
+**/*.njsproj
+**/*.sln
+**/*.sw?
 
 # Project specific
-nginx/.htpasswd
+**/nginx/.htpasswd
