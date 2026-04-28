@@ -12,7 +12,6 @@ backend_error.log
 **/venv/
 **/.venv/
 **/env/
-**/.env/
 **/__pycache__/
 
 # Build/Dist
@@ -22,8 +21,6 @@ backend_error.log
 **/*.spec
 
 # Local env files
-**/.env
-**/.env.local
 **/*.local
 
 # Database data
