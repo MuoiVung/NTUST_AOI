@@ -8,23 +8,28 @@ import tkinter as tk
 from tkinter import scrolledtext
 import subprocess, threading, time, os, sys, webbrowser, socket, shutil
 
+# ─── PLATFORM CONFIG ──────────────────────────────────────────────────────────
+IS_WINDOWS = sys.platform == "win32"
+CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 DB_DIR         = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR         = os.path.join(BASE_DIR, "NTUST-AOI-UI")
+
 # Auto-detect Python: prefer the running interpreter, then PATH, then a known fallback.
 PYTHON_EXE = (
     sys.executable
     or shutil.which("python")
     or shutil.which("python3")
-    or r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe"
+    or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
 )
 # Auto-detect npm from PATH, fallback to a known Windows location.
 NPM_EXE = (
     shutil.which("npm")
-    or r"C:\Program Files\nodejs\npm.cmd"
+    or (r"C:\Program Files\nodejs\npm.cmd" if IS_WINDOWS else "npm")
 )
-DOCKER_DESKTOP = r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
+DOCKER_DESKTOP = r"C:\Program Files\Docker\Docker\Docker Desktop.exe" if IS_WINDOWS else "/Applications/Docker.app"
 
 FOLDER_MONITOR_PY = os.path.join(DB_DIR, "scripts", "folder_monitor.py")
 
@@ -54,7 +59,7 @@ PURPLE       = "#bc8cff"
 def docker_ok():
     try:
         r = subprocess.run(["docker", "info"], capture_output=True, timeout=4,
-                           creationflags=subprocess.CREATE_NO_WINDOW)
+                           creationflags=CREATION_FLAGS)
         return r.returncode == 0
     except Exception:
         return False
@@ -76,17 +81,17 @@ def wait_port(port, timeout=90, interval=2):
 def monitor_ok():
     """Checks if folder_monitor.py is running by scanning the process list."""
     try:
-        # tasklist /v shows full command line info in some cases, but for scripts 
-        # it's better to check if 'python.exe' is running with the script name.
-        # However, tasklist /v is slow. Let's use a simpler check if possible.
-        r = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python.exe', '/NH', '/FO', 'CSV'], 
-                           capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        # If we want to be sure it's OUR script, we really need the command line.
-        # Since wmic worked before, let's keep it but wrap it better or use a fallback.
-        cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
-        r = subprocess.run(cmd, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        if r.returncode == 0 and r.stdout:
-            return "folder_monitor.py" in r.stdout
+        if IS_WINDOWS:
+            # tasklist /v is slow. wmic is faster but sometimes restricted.
+            cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
+            r = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATION_FLAGS)
+            if r.returncode == 0 and r.stdout:
+                return "folder_monitor.py" in r.stdout
+        else:
+            # macOS/Linux check
+            r = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout:
+                return "folder_monitor.py" in r.stdout
         return False
     except:
         return False
@@ -369,8 +374,10 @@ class LauncherApp(tk.Tk):
         if not docker_ok():
             self._log_write("Docker not running — launching Docker Desktop…", "warn")
             try:
-                subprocess.Popen([DOCKER_DESKTOP],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                if IS_WINDOWS:
+                    subprocess.Popen([DOCKER_DESKTOP], creationflags=CREATION_FLAGS)
+                else:
+                    subprocess.Popen(["open", "-a", "Docker"])
             except FileNotFoundError:
                 self._log_write("Docker Desktop not found. Please start it manually.", "err")
             self._log_write("Waiting for Docker daemon (up to 120s)…", "warn")
@@ -396,7 +403,7 @@ class LauncherApp(tk.Tk):
         if not port_open(5433):
             ret = subprocess.run(["docker", "compose", "up", "-d"],
                                  cwd=DB_DIR, capture_output=True, text=True,
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                                 creationflags=CREATION_FLAGS)
             if ret.returncode != 0:
                 self._log_write(f"docker compose error:\n{ret.stderr}", "err")
                 self._set_service("db", "error")
@@ -422,7 +429,7 @@ class LauncherApp(tk.Tk):
                 [PYTHON_EXE, "-c",
                  "import uvicorn; uvicorn.run('api.main:app', host='0.0.0.0', port=8000)"],
                 cwd=DB_DIR,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                creationflags=CREATION_FLAGS
             )
             if not wait_port(BACKEND_PORT, timeout=30):
                 self._log_write("ERROR: FastAPI backend did not start.", "err")
@@ -442,7 +449,7 @@ class LauncherApp(tk.Tk):
             self._proc_monitor = subprocess.Popen(
                 [PYTHON_EXE, FOLDER_MONITOR_PY],
                 cwd=DB_DIR,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                creationflags=CREATION_FLAGS
             )
             time.sleep(2) # Give it a moment
             if not monitor_ok():
@@ -462,7 +469,7 @@ class LauncherApp(tk.Tk):
             self._proc_ui = subprocess.Popen(
                 [NPM_EXE, "run", "dev"],
                 cwd=UI_DIR,
-                creationflags=subprocess.CREATE_NO_WINDOW
+                creationflags=CREATION_FLAGS
             )
             if not wait_port(UI_PORT, timeout=60):
                 self._log_write("ERROR: Vite UI server did not start.", "err")
@@ -534,12 +541,17 @@ class LauncherApp(tk.Tk):
         if monitor_ok():
             self._log_write("Stopping Folder Monitor…", "warn")
             self._set_service("monitor", "stopping")
-            # Try specific wmic termination
-            subprocess.run(['wmic', 'process', 'where', "commandline like '%folder_monitor.py%'", 'call', 'terminate'], 
-                           creationflags=subprocess.CREATE_NO_WINDOW)
-            # Fallback for those that don't match exactly
-            subprocess.run(["taskkill", "/F", "/FI", "IMAGENAME eq python.exe", "/FI", "WINDOWTITLE eq *folder_monitor*"], 
-                           creationflags=subprocess.CREATE_NO_WINDOW)
+            if IS_WINDOWS:
+                # Try specific wmic termination
+                subprocess.run(['wmic', 'process', 'where', "commandline like '%folder_monitor.py%'", 'call', 'terminate'], 
+                               creationflags=CREATION_FLAGS)
+                # Fallback for those that don't match exactly
+                subprocess.run(["taskkill", "/F", "/FI", "IMAGENAME eq python.exe", "/FI", "WINDOWTITLE eq *folder_monitor*"], 
+                               creationflags=CREATION_FLAGS)
+            else:
+                # macOS/Linux pkill
+                subprocess.run(['pkill', '-f', 'folder_monitor.py'])
+
             if self._proc_monitor:
                 try: self._proc_monitor.terminate(); self._proc_monitor.kill()
                 except: pass
@@ -552,7 +564,7 @@ class LauncherApp(tk.Tk):
         ret = subprocess.run(
             ["docker", "compose", "down"],
             cwd=DB_DIR, capture_output=True, text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW
+            creationflags=CREATION_FLAGS
         )
         if ret.returncode == 0:
             self._log_write("Docker services stopped ✓", "ok")
@@ -592,5 +604,8 @@ if __name__ == "__main__":
         app.protocol("WM_DELETE_WINDOW", app.on_close)
         app.mainloop()
     except Exception as e:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, f"Launcher Error:\n{str(e)}", "Startup Error", 0x10)
+        if IS_WINDOWS:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, f"Launcher Error:\n{str(e)}", "Startup Error", 0x10)
+        else:
+            print(f"Launcher Error: {e}")
