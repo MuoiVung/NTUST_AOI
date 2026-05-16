@@ -1,47 +1,59 @@
 # 🔬 NTUST AOI System
 
-Welcome to the **NTUST Automated Optical Inspection (AOI)** platform. This repository contains the complete system, including the Database, Backend API, and a modern React Frontend.
+Welcome to the **NTUST Automated Optical Inspection (AOI)** platform. This repository contains a complete industrial solution for PCB inspection, including a PostgreSQL metadata engine, a dual-camera capture handler, and a modern React-based HMI.
 
-## 🚀 One-Click Startup (Recommended)
+---
 
-The easiest way to run the entire system is by using the **System Launcher**. It automatically orchestrates Docker, the Database, the Backend, and the Frontend in the correct order.
+## 📂 Project Documentation
 
-### Prerequisites
-Before starting, ensure you have the following installed:
-- [Python 3.10+](https://www.python.org/)
-- [Node.js & npm](https://nodejs.org/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+We provide comprehensive documentation in both English and Traditional Chinese to support global deployment and local operation in Taiwan.
 
-### How to use the Launcher
+### 🇬🇧 English (EN)
+- [**Operator Manual**](docs/EN/OPERATOR_MANUAL.md): How to use the dashboard and review results.
+- [**Setup & Deployment Guide**](docs/EN/SETUP_GUIDE.md): How to install and configure the system on an IPC.
+- [**System Architecture**](docs/EN/ARCHITECTURE.md): Deep dive into the IPC-Master control flow.
+- [**Database Schema**](docs/EN/DATABASE_SCHEMA.md): Details on the 5-table relational structure.
+- [**Data Lifecycle Flow**](docs/EN/DATA_FLOW.md): Visualizing image capture and long-term archiving.
 
-1. **Open a Terminal** in the project root directory.
-2. **Run the launcher**:
+### 🇹🇼 Traditional Chinese (ZH-TW)
+- [**操作員手冊 (Operator Manual)**](docs/ZH-TW/OPERATOR_MANUAL.md)
+- [**安裝與部署指南 (Setup Guide)**](docs/ZH-TW/SETUP_GUIDE.md)
+- [**系統架構 (Architecture)**](docs/ZH-TW/ARCHITECTURE.md)
+- [**數據庫架構 (Database Schema)**](docs/ZH-TW/DATABASE_SCHEMA.md)
+- [**數據生命週期流程 (Data Flow)**](docs/ZH-TW/DATA_FLOW.md)
+
+---
+
+## 🚀 Quick Start
+
+To launch the entire system (Database, Backend, and Frontend) with a single command:
+
+1. Ensure **Docker Desktop** is running.
+2. Run the system launcher:
    ```bash
    python launcher.py
    ```
-3. **Click "Start All Services"**:
-   - The launcher will check for Docker and start it if needed.
-   - It will boot up the PostgreSQL database and Nginx server via Docker Compose.
-   - It will start the FastAPI backend and the Folder Monitor service.
-   - Finally, it will launch the Vite development server for the UI and open your browser automatically.
+3. Access the HMI at: `http://localhost:3001`
 
 ---
 
-## 📁 Repository Structure
+## 🏗 Repository Structure
 
-- **`launcher.py`**: The main GUI tool to manage all services.
-- **`NTUST-AOI-UI/`**: The React/TypeScript frontend dashboard.
-- **`ntust_aoi_pcb_db/`**: The backend infrastructure, including:
-  - Docker Compose configurations.
-  - Python FastAPI source code.
-  - Database schemas and scripts.
-  - `folder_monitor.py` for real-time image processing.
-
-## 🛠 Manual Setup
-
-If you prefer to run services manually, please follow the instructions in the respective directories:
-- For the Frontend UI: [NTUST-AOI-UI/README.md](NTUST-AOI-UI/README.md)
-- For the Backend/DB: [ntust_aoi_pcb_db/README.md](ntust_aoi_pcb_db/README.md) (if available)
+```text
+.
+├── docs/               # Multi-language Documentation
+│   ├── EN/             # English Docs
+│   └── ZH-TW/          # Traditional Chinese (Taiwan) Docs
+├── ntust_aoi_pcb_db/   # Backend, Database & Docker Configs
+├── NTUST-AOI-UI/       # React-based HMI Frontend
+├── skills/             # AI Agent helper skills
+└── launcher.py         # Main system orchestrator
+```
 
 ---
-© 2026 NTUST AOI Project
+
+## 🛠 Tech Stack
+- **Frontend**: React, Vite, Tailwind CSS.
+- **Backend**: Python FastAPI, Uvicorn.
+- **Database**: PostgreSQL (Dockerized).
+- **Storage**: Local FS + Long-term Archiving logic.
