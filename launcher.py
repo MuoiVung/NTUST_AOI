@@ -441,11 +441,21 @@ class LauncherApp(tk.Tk):
         self._log_write("docker compose up -d …", "info")
 
         if not port_open(5433):
-            ret = subprocess.run(["docker", "compose", "up", "-d"],
-                                 cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-                                 creationflags=CREATION_FLAGS)
-            if ret.returncode != 0:
-                self._log_write(f"docker compose error:\n{ret.stderr}", "err")
+            self._log_write("Launching docker containers…", "info")
+            try:
+                ret = subprocess.run(
+                    ["docker", "compose", "up", "-d"],
+                    cwd=DB_DIR,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    creationflags=CREATION_FLAGS,
+                    timeout=60
+                )
+                if ret.returncode != 0:
+                    self._log_write("docker compose up returned non-zero. Checking port anyway…", "warn")
+            except subprocess.TimeoutExpired:
+                self._log_write("docker compose up timed out (60s) — checking if port opened anyway…", "warn")
+            except Exception as e:
+                self._log_write(f"docker compose up error: {e}", "err")
                 self._set_service("db", "error")
                 self._on_fail(); return
             self._log_write("Waiting for PostgreSQL (port 5433)…", "info")
