@@ -30,13 +30,22 @@ else:
 DB_DIR = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 
-# Auto-detect Python: prefer the running interpreter, then PATH, then a known fallback.
-PYTHON_EXE = (
-    sys.executable
-    or shutil.which("python")
-    or shutil.which("python3")
-    or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
-)
+# Auto-detect Python interpreter.
+# IMPORTANT: When frozen by PyInstaller, sys.executable points to AOI_Launcher.exe itself,
+# NOT python.exe. So we must NOT use sys.executable when frozen.
+if getattr(sys, "frozen", False):
+    PYTHON_EXE = (
+        shutil.which("python")
+        or shutil.which("python3")
+        or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
+    )
+else:
+    PYTHON_EXE = (
+        sys.executable
+        or shutil.which("python")
+        or shutil.which("python3")
+        or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
+    )
 # Auto-detect npm from PATH, fallback to a known Windows location.
 NPM_EXE = (
     shutil.which("npm")
