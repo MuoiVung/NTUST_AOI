@@ -658,15 +658,20 @@ class LauncherApp(tk.Tk):
         # docker compose down
         self._log_write("Running docker compose down…", "warn")
         self._set_service("db", "stopping")
-        ret = subprocess.run(
-            ["docker", "compose", "down"],
-            cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-            creationflags=CREATION_FLAGS
-        )
-        if ret.returncode == 0:
-            self._log_write("Docker services stopped ✓", "ok")
-        else:
-            self._log_write(f"docker compose down: {ret.stderr.strip()}", "err")
+        try:
+            ret = subprocess.run(
+                ["docker", "compose", "down"],
+                cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+                creationflags=CREATION_FLAGS, timeout=15
+            )
+            if ret.returncode == 0:
+                self._log_write("Docker services stopped ✓", "ok")
+            else:
+                self._log_write(f"docker compose down: {ret.stderr.strip()}", "err")
+        except subprocess.TimeoutExpired:
+            self._log_write("Docker compose down timed out (took > 15s) — forcing closure.", "warn")
+        except Exception as e:
+            self._log_write(f"Docker compose down failed: {str(e)}", "err")
 
         self._set_service("db", "idle")
         self._set_service("docker", "idle")
