@@ -13,7 +13,13 @@ IS_WINDOWS = sys.platform == "win32"
 CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
 
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
-BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
+# When bundled by PyInstaller, __file__ points to a temp extraction folder.
+# Use sys.executable (the .exe path) when frozen so DB_DIR is relative to the .exe location.
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DB_DIR         = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR         = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 
