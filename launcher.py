@@ -14,14 +14,21 @@ CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
 
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
 # When bundled by PyInstaller, __file__ points to a temp extraction folder.
-# Use sys.executable (the .exe path) when frozen so DB_DIR is relative to the .exe location.
+# Use sys.executable (the .exe path) when frozen. Also handle the case where
+# the .exe is deployed to Desktop while the project is in Desktop\ntust_aoi\.
 if getattr(sys, "frozen", False):
-    BASE_DIR = os.path.dirname(sys.executable)
+    _exe_dir = os.path.dirname(sys.executable)
+    # If the exe is in the parent of the project (e.g. Desktop\), look one level down
+    _project_subdir = os.path.join(_exe_dir, "ntust_aoi")
+    if os.path.isdir(_project_subdir) and os.path.isdir(os.path.join(_project_subdir, "ntust_aoi_pcb_db")):
+        BASE_DIR = _project_subdir
+    else:
+        BASE_DIR = _exe_dir
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DB_DIR         = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
-UI_DIR         = os.path.join(BASE_DIR, "NTUST-AOI-UI")
+DB_DIR = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
+UI_DIR = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 
 # Auto-detect Python: prefer the running interpreter, then PATH, then a known fallback.
 PYTHON_EXE = (
