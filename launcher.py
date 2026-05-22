@@ -141,8 +141,8 @@ class LauncherApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("NTUST AOI — Launcher")
-        self.geometry("740x720")
-        self.minsize(740, 600)
+        self.geometry("780x800")
+        self.minsize(780, 680)
         self.resizable(True, True)
         self.configure(bg=BG)
 
@@ -184,33 +184,46 @@ class LauncherApp(tk.Tk):
         self._btn_fit.place(relx=0.98, rely=0.1, anchor="ne")
 
         # ── Service cards ────────────────────────────────────────────────────
-        cards = tk.Frame(self, bg=BG, padx=24, pady=10)
+        cards = tk.Frame(self, bg=BG, padx=24, pady=6)
         cards.pack(fill="x")
 
         tk.Label(cards, text="Service Status",
                  font=("Segoe UI", 9, "bold"), fg=TEXT_DIM, bg=BG, anchor="w"
-                 ).pack(fill="x", pady=(0, 6))
+                 ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
 
-        for key, icon, label, _ in SERVICES:
-            card = tk.Frame(cards, bg=CARD_BG, pady=8, padx=18,
+        # Setup 2 columns
+        cards.columnconfigure(0, weight=1)
+        cards.columnconfigure(1, weight=1)
+
+        for idx, (key, icon, label, _) in enumerate(SERVICES):
+            card = tk.Frame(cards, bg=CARD_BG, pady=6, padx=14,
                             highlightbackground=BORDER, highlightthickness=1)
-            card.pack(fill="x", pady=3)
+            
+            # Grid placement (2 columns)
+            r = (idx // 2) + 1
+            c = idx % 2
+            
+            # If it's the last service and odd count, let it span 2 columns
+            if idx == len(SERVICES) - 1 and len(SERVICES) % 2 != 0:
+                card.grid(row=r, column=c, columnspan=2, sticky="ew", padx=3, pady=3)
+            else:
+                card.grid(row=r, column=c, sticky="ew", padx=3, pady=3)
 
-            dot = tk.Label(card, text="●", font=("Segoe UI", 16),
+            dot = tk.Label(card, text="●", font=("Segoe UI", 14),
                            fg=TEXT_DIM, bg=CARD_BG)
-            dot.pack(side="left", padx=(0, 10))
+            dot.pack(side="left", padx=(0, 8))
 
-            icon_lbl = tk.Label(card, text=icon, font=("Segoe UI", 14),
+            icon_lbl = tk.Label(card, text=icon, font=("Segoe UI", 12),
                                 fg=TEXT_MAIN, bg=CARD_BG, width=3)
             icon_lbl.pack(side="left")
 
-            tk.Label(card, text=label, font=("Segoe UI", 12),
-                     fg=TEXT_MAIN, bg=CARD_BG, anchor="w").pack(side="left", padx=5)
+            tk.Label(card, text=label, font=("Segoe UI", 10, "bold"),
+                     fg=TEXT_MAIN, bg=CARD_BG, anchor="w").pack(side="left", padx=4)
 
             state_lbl = tk.Label(card, text="Checking…",
-                                 font=("Segoe UI", 10, "italic"),
+                                 font=("Segoe UI", 9, "italic"),
                                  fg=TEXT_DIM, bg=CARD_BG)
-            state_lbl.pack(side="right", padx=10)
+            state_lbl.pack(side="right", padx=6)
 
             # Add Master Toggle for Sync service
             if key == "sync":
@@ -218,10 +231,10 @@ class LauncherApp(tk.Tk):
                     card, text="Enabled", variable=self._sync_enabled,
                     bg=CARD_BG, fg=TEXT_DIM, activebackground=CARD_BG,
                     activeforeground=TEXT_MAIN, selectcolor=BG,
-                    font=("Segoe UI", 9), cursor="hand2",
+                    font=("Segoe UI", 8), cursor="hand2",
                     command=self._on_sync_toggle
                 )
-                chk.pack(side="right", padx=10)
+                chk.pack(side="right", padx=6)
 
             self._dots[key]  = dot
             self._texts[key] = state_lbl
@@ -278,7 +291,7 @@ class LauncherApp(tk.Tk):
                  ).pack(fill="x", pady=(0, 4))
 
         self._log = scrolledtext.ScrolledText(
-            log_outer, height=6, font=("Consolas", 9),
+            log_outer, height=14, font=("Consolas", 9),
             bg="#090d12", fg="#8b949e", insertbackground=TEXT_MAIN,
             borderwidth=0, highlightthickness=1,
             highlightbackground=BORDER, relief="flat", state="disabled"
@@ -429,7 +442,7 @@ class LauncherApp(tk.Tk):
 
         if not port_open(5433):
             ret = subprocess.run(["docker", "compose", "up", "-d"],
-                                 cwd=DB_DIR, capture_output=True, text=True,
+                                 cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
                                  creationflags=CREATION_FLAGS)
             if ret.returncode != 0:
                 self._log_write(f"docker compose error:\n{ret.stderr}", "err")
@@ -616,7 +629,7 @@ class LauncherApp(tk.Tk):
         self._set_service("db", "stopping")
         ret = subprocess.run(
             ["docker", "compose", "down"],
-            cwd=DB_DIR, capture_output=True, text=True,
+            cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
             creationflags=CREATION_FLAGS
         )
         if ret.returncode == 0:
