@@ -571,9 +571,17 @@ class LauncherApp(tk.Tk):
         if self._proc_ui and self._proc_ui.poll() is None:
             self._log_write("Stopping Vite UI…", "warn")
             self._set_service("ui", "stopping")
-            self._proc_ui.terminate()
-            try:    self._proc_ui.wait(timeout=5)
-            except: self._proc_ui.kill()
+            if IS_WINDOWS:
+                try:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self._proc_ui.pid)], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=CREATION_FLAGS, timeout=3)
+                except Exception:
+                    pass
+            else:
+                self._proc_ui.terminate()
+                try:    self._proc_ui.wait(timeout=3)
+                except: self._proc_ui.kill()
         self._set_service("ui", "idle")
         self._log_write("Vite UI stopped ✓", "ok")
 
@@ -581,9 +589,17 @@ class LauncherApp(tk.Tk):
         if self._proc_backend and self._proc_backend.poll() is None:
             self._log_write("Stopping FastAPI…", "warn")
             self._set_service("backend", "stopping")
-            self._proc_backend.terminate()
-            try:    self._proc_backend.wait(timeout=5)
-            except: self._proc_backend.kill()
+            if IS_WINDOWS:
+                try:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self._proc_backend.pid)], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=CREATION_FLAGS, timeout=3)
+                except Exception:
+                    pass
+            else:
+                self._proc_backend.terminate()
+                try:    self._proc_backend.wait(timeout=3)
+                except: self._proc_backend.kill()
         self._set_service("backend", "idle")
         self._log_write("FastAPI stopped ✓", "ok")
 
@@ -592,15 +608,23 @@ class LauncherApp(tk.Tk):
             self._log_write("Stopping Folder Monitor…", "warn")
             self._set_service("monitor", "stopping")
             if IS_WINDOWS:
-                # Try specific wmic termination
-                subprocess.run(['wmic', 'process', 'where', "commandline like '%folder_monitor.py%'", 'call', 'terminate'], 
-                               creationflags=CREATION_FLAGS)
-                # Fallback for those that don't match exactly
-                subprocess.run(["taskkill", "/F", "/FI", "IMAGENAME eq python.exe", "/FI", "WINDOWTITLE eq *folder_monitor*"], 
-                               creationflags=CREATION_FLAGS)
+                try:
+                    subprocess.run(['wmic', 'process', 'where', "commandline like '%folder_monitor.py%'", 'call', 'terminate'], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=CREATION_FLAGS, timeout=3)
+                except Exception:
+                    pass
+                try:
+                    subprocess.run(["taskkill", "/F", "/FI", "IMAGENAME eq python.exe", "/FI", "WINDOWTITLE eq *folder_monitor*"], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=CREATION_FLAGS, timeout=3)
+                except Exception:
+                    pass
             else:
-                # macOS/Linux pkill
-                subprocess.run(['pkill', '-f', 'folder_monitor.py'])
+                try:
+                    subprocess.run(['pkill', '-f', 'folder_monitor.py'], timeout=3)
+                except Exception:
+                    pass
 
             if self._proc_monitor:
                 try: self._proc_monitor.terminate(); self._proc_monitor.kill()
@@ -613,10 +637,17 @@ class LauncherApp(tk.Tk):
             self._log_write("Stopping Cloud Sync…", "warn")
             self._set_service("sync", "stopping")
             if IS_WINDOWS:
-                subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
-                               creationflags=CREATION_FLAGS)
+                try:
+                    subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=CREATION_FLAGS, timeout=3)
+                except Exception:
+                    pass
             else:
-                subprocess.run(['pkill', '-f', 'sync_to_server.py'])
+                try:
+                    subprocess.run(['pkill', '-f', 'sync_to_server.py'], timeout=3)
+                except Exception:
+                    pass
 
             if hasattr(self, '_proc_sync') and self._proc_sync:
                 try: self._proc_sync.terminate(); self._proc_sync.kill()
