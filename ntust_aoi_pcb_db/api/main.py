@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from minio import Minio
 import io
 import mimetypes
+import subprocess
 
 load_dotenv()
 
@@ -275,6 +276,29 @@ def update_config(config_name: str, payload: dict = Body(...)):
             return {"message": "Config updated successfully"}
     finally:
         release_db_connection(conn)
+
+
+@app.get("/services/status")
+def get_services_status():
+    """Checks if specific AOI services are running in the OS."""
+    try:
+        # Check for sync_to_server.py in tasklist
+        output = subprocess.check_output('wmic process where "commandline like \'%sync_to_server.py%\'" get commandline', shell=True).decode()
+        is_sync_running = "sync_to_server.py" in output and "wmic" not in output
+        
+        # Check for folder_monitor.py
+        output_monitor = subprocess.check_output('wmic process where "commandline like \'%folder_monitor.py%\'" get commandline', shell=True).decode()
+        is_monitor_running = "folder_monitor.py" in output_monitor and "wmic" not in output_monitor
+
+        return {
+            "sync_service": "running" if is_sync_running else "stopped",
+            "monitor_service": "running" if is_monitor_running else "stopped"
+        }
+    except Exception:
+        return {
+            "sync_service": "unknown",
+            "monitor_service": "unknown"
+        }
 
 
 @app.post("/configs/init")

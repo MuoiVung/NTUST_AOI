@@ -151,6 +151,7 @@ class LauncherApp(tk.Tk):
         self._proc_monitor = None
         self._dots  = {}
         self._texts = {}
+        self._sync_enabled = tk.BooleanVar(value=True)
 
         self._build_ui()
 
@@ -210,6 +211,17 @@ class LauncherApp(tk.Tk):
                                  font=("Segoe UI", 10, "italic"),
                                  fg=TEXT_DIM, bg=CARD_BG)
             state_lbl.pack(side="right", padx=10)
+
+            # Add Master Toggle for Sync service
+            if key == "sync":
+                chk = tk.Checkbutton(
+                    card, text="Enabled", variable=self._sync_enabled,
+                    bg=CARD_BG, fg=TEXT_DIM, activebackground=CARD_BG,
+                    activeforeground=TEXT_MAIN, selectcolor=BG,
+                    font=("Segoe UI", 9), cursor="hand2",
+                    command=self._on_sync_toggle
+                )
+                chk.pack(side="right", padx=10)
 
             self._dots[key]  = dot
             self._texts[key] = state_lbl
@@ -469,17 +481,21 @@ class LauncherApp(tk.Tk):
         self._set_service("monitor", "ok")
 
         # 3.6 Cloud Sync
-        self._set_service("sync", "running")
-        self._set_status("Starting Cloud Sync…")
-        if not sync_ok():
-            sync_script = os.path.join(DB_DIR, "scripts", "sync_to_server.py")
-            self._proc_sync = subprocess.Popen(
-                [PYTHON_EXE, sync_script],
-                cwd=DB_DIR,
-                creationflags=CREATION_FLAGS
-            )
-            time.sleep(1)
-        self._set_service("sync", "ok")
+        if self._sync_enabled.get():
+            self._set_service("sync", "running")
+            self._set_status("Starting Cloud Sync…")
+            if not sync_ok():
+                sync_script = os.path.join(DB_DIR, "scripts", "sync_to_server.py")
+                self._proc_sync = subprocess.Popen(
+                    [PYTHON_EXE, sync_script],
+                    cwd=DB_DIR,
+                    creationflags=CREATION_FLAGS
+                )
+                time.sleep(1)
+            self._set_service("sync", "ok")
+        else:
+            self._set_service("sync", "idle")
+            self._log_write("Cloud Sync is disabled by user — skipping.", "warn")
 
         # 4. Vite UI
         self._set_service("ui", "running")
@@ -630,6 +646,26 @@ class LauncherApp(tk.Tk):
             self.update_idletasks()
         except Exception:
             pass
+
+    def _on_sync_toggle(self):
+        """Called when the 'Enabled' checkbox for Cloud Sync is clicked."""
+        is_enabled = self._sync_enabled.get()
+        if not is_enabled:
+            self._log_write("Cloud Sync disabled by user.", "warn")
+            # If it's running, stop it
+            if sync_ok():
+                self._shutdown_sync_only()
+        else:
+            self._log_write("Cloud Sync enabled.", "info")
+
+    def _shutdown_sync_only(self):
+        self._log_write("Stopping Cloud Sync service...", "warn")
+        if IS_WINDOWS:
+            subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
+                           creationflags=CREATION_FLAGS)
+        else:
+            subprocess.run(['pkill', '-f', 'sync_to_server.py'])
+        self._set_service("sync", "idle")
 
     def on_close(self):
         self.destroy()

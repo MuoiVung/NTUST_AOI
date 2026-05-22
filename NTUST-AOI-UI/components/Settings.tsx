@@ -40,10 +40,25 @@ export const Settings = () => {
     const [editValue, setEditValue] = useState<number>(0);
     const [editUnit, setEditUnit] = useState<number>(1);
     const [initializing, setInitializing] = useState(false);
+    const [serviceStatus, setServiceStatus] = useState({ sync_service: 'loading', monitor_service: 'loading' });
 
     useEffect(() => {
         fetchConfigs();
+        fetchServiceStatus();
+        
+        // Poll service status every 5 seconds
+        const interval = setInterval(fetchServiceStatus, 5000);
+        return () => clearInterval(interval);
     }, []);
+
+    const fetchServiceStatus = async () => {
+        try {
+            const status = await api.getServicesStatus();
+            setServiceStatus(status);
+        } catch (error) {
+            console.error('Failed to fetch service status', error);
+        }
+    };
 
     const fetchConfigs = async () => {
         try {
@@ -128,17 +143,20 @@ export const Settings = () => {
                             const totalSeconds = parseInt(config.config_value) || 0;
                             const unit = getBestUnit(totalSeconds);
                             
-                            const info = CONFIG_LABELS[config.config_name] || {
-                                label: config.config_name.replace(/_/g, ' '),
-                                description: 'General system setting',
-                                icon: 'settings'
-                            };
+                                    const info = CONFIG_LABELS[config.config_name] || {
+                                        label: config.config_name.replace(/_/g, ' '),
+                                        description: 'General system setting',
+                                        icon: 'settings'
+                                    };
 
-                            return (
-                                <div key={config.config_key} className={`
-                                    p-6 rounded-2xl border transition-all duration-300
-                                    ${isEditing ? 'border-primary ring-4 ring-primary/5 bg-white dark:bg-slate-900 shadow-xl' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm'}
-                                `}>
+                                    const isSyncDisabled = config.config_name === 'longterm_sync_interval' && serviceStatus.sync_service !== 'running';
+
+                                    return (
+                                        <div key={config.config_key} className={`
+                                            p-6 rounded-2xl border transition-all duration-300
+                                            ${isEditing ? 'border-primary ring-4 ring-primary/5 bg-white dark:bg-slate-900 shadow-xl' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-sm'}
+                                            ${isSyncDisabled ? 'opacity-70 grayscale-[0.5]' : ''}
+                                        `}>
                                     <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
                                         <div className={`size-12 rounded-xl flex items-center justify-center shrink-0 ${isEditing ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                                             <span className="material-symbols-outlined">{info.icon}</span>
@@ -149,8 +167,12 @@ export const Settings = () => {
                                             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{info.description}</p>
                                         </div>
 
-                                        <div className="flex items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0">
-                                            {isEditing ? (
+                                            {isSyncDisabled ? (
+                                                <div className="flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 px-4 py-2 rounded-xl border border-amber-100 dark:border-amber-800/50">
+                                                    <span className="material-symbols-outlined text-amber-500 text-sm">warning</span>
+                                                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Enable Sync Service in Launcher to edit</span>
+                                                </div>
+                                            ) : isEditing ? (
                                                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                                     <div className="flex gap-1">
                                                         <input
@@ -196,7 +218,6 @@ export const Settings = () => {
                                                     </button>
                                                 </div>
                                             )}
-                                        </div>
                                     </div>
                                 </div>
                             );
