@@ -1,0 +1,88 @@
+---
+title: '第二章:輸送帶使用手冊, Max'
+tags: [Documentation]
+
+---
+
+
+6/1 Suggestion
+1. Good: version control table  V
+2. Illustration of conveyor ( L x W x H)   V
+3. Operation information: I/O parameter, error log...to understand the status of conveyor
+4. calibration process
+5. Tool and service 
+6. Workflow, schematic, and wiring diagram (may provide by supplier or create by our own. ) 
+
+
+
+
+
+# 第二章:輸送帶使用手冊
+
+## 文件管理
+
+| 欄位 | 內容 |
+|---|---|
+| 文件標題 | 輸送帶使用手冊 |
+| 系統 | 輸送帶 |
+| 適用對象 | 作業員, 工程師|
+| 版本 | Draft v1.3 |
+| 日期 | 2026-06-04 |
+| 編製者 | Max |
+
+## 0. 版本歷史
+
+| 版本 | 日期 | 說明 | 作者 |
+|---|---|---|---|
+| Draft v1.1 | 2026-05-25 | 輸送帶操作 | Max |
+| Draft v1.2 | 2026-06-01 | 新增輸送帶資料 | Max |
+| Draft v1.3 | 2026-06-04 | 新增錯誤代碼C01-C04及IO腳位資料 | Max |
+
+
+## 1. 輸送帶資料
+- 長2000mm
+- 寬可從100mm至600mm之間調整
+- 高560mm
+- 運轉速度為5000m/s
+- 馬達型號: 東方 BLM6400S-GFV
+- 減速機型號: 東方 GFV6G50
+- 驅動器型號: 東方 BMUD400-S
+
+## 2. 開機動作
+- 開啟電源
+- 確認鍊條復歸至起始點
+- 確認感測器狀態
+
+## 3. 間距調整
+- **左右間距**
+  - 利用輸送帶轉輪手動調整左右間距
+- **前後間距**
+  - 根據單板鍊條的編號，將PCBA支撐板插入並調整位子
+
+## 4. 感測器
+- 前後接近開關(板子偵測)
+- 中間光閘(定位
+
+## 5. 錯誤代碼
+| 錯誤代碼 | 原因    |
+| ----- | -------- |
+| C01 | 進板接近開關狀態異常|
+| C02 | 出板接近開狀態異常|
+| C03 | 光閘感測器狀態異常|
+| C04 | 馬達驅動器狀態異常|
+| C05 | |
+| C06 | |
+| C07 | |
+| C08 | |
+
+## 6. IO腳位
+| 設備 | IO腳位    |
+| ----- | -------- |
+| 馬達驅動器    |    |
+| 接近開關1    |    |
+| 接近開關2    |    |
+| 光閘感測器   |     |
+
+
+保養資料
+FAQ
