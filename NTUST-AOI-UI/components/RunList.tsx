@@ -149,10 +149,27 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                                 <span>{run.machine_id}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-6 py-4 flex justify-end gap-2">
                                             <button onClick={() => onViewDetail(run.run_number)} className="inline-flex items-center gap-1 rounded bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
                                                 <span className="material-symbols-outlined text-[16px]">visibility</span>
                                                 View Detail
+                                            </button>
+                                            <button 
+                                                onClick={async () => {
+                                                    if(window.confirm(`⚠️ Are you sure you want to PERMANENTLY delete run ${run.run_number} and ALL its associated images?`)) {
+                                                        try {
+                                                            await inspectionService.deleteRun(run.run_number);
+                                                            fetchRuns();
+                                                        } catch (error) {
+                                                            console.error('Error deleting run', error);
+                                                            alert('Failed to delete this run!');
+                                                        }
+                                                    }
+                                                }}
+                                                className="inline-flex items-center gap-1 rounded bg-red-500/10 px-2 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/20 transition-colors"
+                                                title="Delete Run"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">delete</span>
                                             </button>
                                         </td>
                                     </tr>

@@ -6,9 +6,10 @@ interface ImageViewerProps {
     image: CapturedImage;
     onClose: () => void;
     onUpdate: (updatedImage: CapturedImage) => void;
+    onDelete?: (imageId: string) => void;
 }
 
-export const ImageViewer = ({ image, onClose, onUpdate }: ImageViewerProps) => {
+export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerProps) => {
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
@@ -57,6 +58,19 @@ export const ImageViewer = ({ image, onClose, onUpdate }: ImageViewerProps) => {
             alert('Failed to save note');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!window.confirm("⚠️ Are you sure you want to PERMANENTLY delete this image?\nThis will remove the file from the local disk and database.")) return;
+        
+        try {
+            await inspectionService.deleteImage(image.id);
+            if (onDelete) onDelete(image.id);
+            onClose();
+        } catch (error) {
+            console.error('Failed to delete image', error);
+            alert('Failed to delete image');
         }
     };
 
@@ -192,6 +206,14 @@ export const ImageViewer = ({ image, onClose, onUpdate }: ImageViewerProps) => {
                             >
                                 <span className="material-symbols-outlined text-[20px]">save</span>
                                 <span>{isSaving ? 'Saving...' : 'Save Notes'}</span>
+                            </button>
+                            
+                            <button
+                                onClick={handleDelete}
+                                className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 font-bold py-3 rounded-xl transition-all shadow-lg mt-2"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                                <span>Delete Image</span>
                             </button>
                         </div>
 

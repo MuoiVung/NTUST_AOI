@@ -57,6 +57,10 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
         setSelectedImage(updatedImage);
     };
 
+    const handleImageDelete = (imageId: string) => {
+        setImages(imgs => imgs.filter(img => img.id !== imageId));
+    };
+
     if (!detail && offset === 0) return <div className="p-10 font-medium text-slate-500">Loading data...</div>;
     if (!detail) return null;
 
@@ -158,6 +162,7 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
                     image={selectedImage}
                     onClose={() => setSelectedImage(null)}
                     onUpdate={handleImageUpdate}
+                    onDelete={handleImageDelete}
                 />
             )}
         </div>

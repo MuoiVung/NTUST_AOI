@@ -192,6 +192,95 @@ def update_image(image_id: str, payload: dict = Body(...)):
         release_db_connection(conn)
 
 
+@app.delete("/images/{image_id}")
+def delete_image(image_id: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Get paths
+            cur.execute("SELECT local_path, longterm_path, is_uploaded_longterm FROM images WHERE image_id = %s", (image_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Image not found")
+            
+            local_path = row["local_path"]
+            longterm_path = row["longterm_path"]
+            is_cloud = row["is_uploaded_longterm"]
+
+            # 2. Delete local file
+            if local_path:
+                abs_path = local_path if os.path.isabs(local_path) else os.path.join(IMAGE_WATCH_DIR, local_path)
+                if os.path.exists(abs_path):
+                    try:
+                        os.remove(abs_path)
+                    except Exception as e:
+                        print(f"Warning: Failed to delete local file {abs_path}: {e}")
+
+            # 3. Delete from MinIO (Cloud)
+            if is_cloud and longterm_path:
+                try:
+                    parts = longterm_path.split('/', 1)
+                    if len(parts) == 2:
+                        bucket = parts[0]
+                        obj_name = parts[1]
+                        minio_client.remove_object(bucket, obj_name)
+                except Exception as e:
+                    print(f"Warning: Failed to delete cloud file {longterm_path}: {e}")
+
+            # 4. Delete DB record
+            cur.execute("DELETE FROM images WHERE image_id = %s", (image_id,))
+            conn.commit()
+            
+            return {"message": "Image deleted successfully"}
+    finally:
+        release_db_connection(conn)
+
+@app.delete("/runs/{run_number}")
+def delete_run(run_number: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1. Fetch all images for this run to delete physical files
+            cur.execute("SELECT local_path, longterm_path, is_uploaded_longterm FROM images WHERE run_number = %s", (run_number,))
+            images = cur.fetchall()
+            
+            for img in images:
+                local_path = img["local_path"]
+                longterm_path = img["longterm_path"]
+                is_cloud = img["is_uploaded_longterm"]
+                
+                # Delete local
+                if local_path:
+                    abs_path = local_path if os.path.isabs(local_path) else os.path.join(IMAGE_WATCH_DIR, local_path)
+                    if os.path.exists(abs_path):
+                        try:
+                            os.remove(abs_path)
+                        except Exception as e:
+                            print(f"Warning: Failed to delete local file {abs_path}: {e}")
+                
+                # Delete cloud
+                if is_cloud and longterm_path:
+                    try:
+                        parts = longterm_path.split('/', 1)
+                        if len(parts) == 2:
+                            minio_client.remove_object(parts[0], parts[1])
+                    except Exception as e:
+                        print(f"Warning: Failed to delete cloud file {longterm_path}: {e}")
+
+            # 2. Delete the images from DB
+            cur.execute("DELETE FROM images WHERE run_number = %s", (run_number,))
+            
+            # 3. Delete the run from DB
+            cur.execute("DELETE FROM runs WHERE run_number = %s", (run_number,))
+            
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Run not found")
+                
+            conn.commit()
+            return {"message": f"Run {run_number} and all its images deleted successfully"}
+    finally:
+        release_db_connection(conn)
+
 @app.get("/images/proxy/{image_id}")
 def proxy_image(image_id: str):
     """Serves images from local disk or fetches from MinIO if archived."""

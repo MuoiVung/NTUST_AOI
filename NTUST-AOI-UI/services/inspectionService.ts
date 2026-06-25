@@ -141,6 +141,10 @@ export const inspectionService = {
         });
     },
 
+    deleteImage: async (imageId: string): Promise<void> => {
+        await apiFetch(`/images/${imageId}`, { method: 'DELETE' });
+    },
+
     deleteRun: async (runNumber: string): Promise<void> => {
         await apiFetch(`/runs/${runNumber}`, { method: 'DELETE' });
     },

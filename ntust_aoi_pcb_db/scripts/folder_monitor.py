@@ -99,16 +99,30 @@ def insert_image_record(file_path, file_name, file_size):
         conn.close()
 
 class ImageHandler(FileSystemEventHandler):
+    def __init__(self):
+        super().__init__()
+        self.last_processed = {}
+
     def on_created(self, event):
         if event.is_directory: return
         self.process_file(event.src_path)
         
     def process_file(self, file_path):
         file_name = os.path.basename(file_path)
+        logical_path = os.path.abspath(file_path)
+        
+        # Debounce (Khử nhiễu): Bỏ qua nếu file này vừa được xử lý trong 2 giây qua
+        current_time = time.time()
+        if logical_path in self.last_processed:
+            if current_time - self.last_processed[logical_path] < 2.0:
+                return
+                
+        self.last_processed[logical_path] = current_time
+        
         _, ext = os.path.splitext(file_name)
         if ext.lower() in ALLOWED_EXTENSIONS:
             logger.info(f"Processing image: {file_name}")
-            time.sleep(0.5)
+            time.sleep(0.5)  # Chờ hệ điều hành nhả file lock
             try:
                 file_size = os.path.getsize(file_path)
                 insert_image_record(file_path, file_name, file_size)

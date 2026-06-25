@@ -1,24 +1,22 @@
-"""
-NTUST AOI System Launcher
-One-click startup: Docker → DB Services → FastAPI Backend → Vite UI → Browser
-On re-open: auto-detects which services are already running.
-"""
+import os
+import sys
+import shutil
+import socket
+import webbrowser
+from pathlib import Path
 
-import tkinter as tk
-from tkinter import scrolledtext
-import subprocess, threading, time, os, sys, webbrowser, socket, shutil
-
-# ─── PLATFORM CONFIG ──────────────────────────────────────────────────────────
-IS_WINDOWS = sys.platform == "win32"
-CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QTabWidget, QTextEdit, QGridLayout, QFrame, QCheckBox, QMessageBox, QLineEdit, QFileDialog
+)
+from PySide6.QtCore import QProcess, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QIcon
 
 # ─── PATH CONFIG ──────────────────────────────────────────────────────────────
-# When bundled by PyInstaller, __file__ points to a temp extraction folder.
-# Use sys.executable (the .exe path) when frozen. Also handle the case where
-# the .exe is deployed to Desktop while the project is in Desktop\ntust_aoi\.
+IS_WINDOWS = sys.platform == "win32"
+
 if getattr(sys, "frozen", False):
     _exe_dir = os.path.dirname(sys.executable)
-    # If the exe is in the parent of the project (e.g. Desktop\), look one level down
     _project_subdir = os.path.join(_exe_dir, "ntust_aoi")
     if os.path.isdir(_project_subdir) and os.path.isdir(os.path.join(_project_subdir, "ntust_aoi_pcb_db")):
         BASE_DIR = _project_subdir
@@ -30,736 +28,528 @@ else:
 DB_DIR = os.path.join(BASE_DIR, "ntust_aoi_pcb_db")
 UI_DIR = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 
-# Auto-detect Python interpreter.
-# IMPORTANT: When frozen by PyInstaller, sys.executable points to AOI_Launcher.exe itself,
-# NOT python.exe. So we must NOT use sys.executable when frozen.
-if getattr(sys, "frozen", False):
-    PYTHON_EXE = (
-        shutil.which("python")
-        or shutil.which("python3")
-        or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
-    )
-else:
-    PYTHON_EXE = (
-        sys.executable
-        or shutil.which("python")
-        or shutil.which("python3")
-        or (r"C:\Users\OMNI-3125HTT-ADN\AppData\Local\Programs\Python\Python311\python.exe" if IS_WINDOWS else "python3")
-    )
-# Auto-detect npm from PATH, fallback to a known Windows location.
-NPM_EXE = (
-    shutil.which("npm")
-    or (r"C:\Program Files\nodejs\npm.cmd" if IS_WINDOWS else "npm")
-)
-DOCKER_DESKTOP = r"C:\Program Files\Docker\Docker\Docker Desktop.exe" if IS_WINDOWS else "/Applications/Docker.app"
+PYTHON_EXE = getattr(sys, "executable", shutil.which("python") or shutil.which("python3") or "python")
+NPM_EXE = shutil.which("npm") or (r"C:\Program Files\nodejs\npm.cmd" if IS_WINDOWS else "npm")
+DOCKER_EXE = shutil.which("docker") or "docker"
 
-FOLDER_MONITOR_PY = os.path.join(DB_DIR, "scripts", "folder_monitor.py")
+# ─── STYLE ────────────────────────────────────────────────────────────────────
+DARK_THEME_QSS = """
+QMainWindow, QWidget {
+    background-color: #0d1117;
+    color: #e6edf3;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+QFrame#ServiceCard {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+}
+QPushButton {
+    background-color: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #30363d;
+    border-color: #8b949e;
+}
+QPushButton:disabled {
+    background-color: #161b22;
+    color: #484f58;
+    border-color: #21262d;
+}
+QPushButton#BtnStart {
+    background-color: #238636;
+    color: white;
+    border: none;
+}
+QPushButton#BtnStart:hover { background-color: #2ea043; }
+QPushButton#BtnStop {
+    background-color: #da3633;
+    color: white;
+    border: none;
+}
+QPushButton#BtnStop:hover { background-color: #f85149; }
+QTabWidget::pane {
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    background: #0d1117;
+}
+QTabBar::tab {
+    background: #161b22;
+    border: 1px solid #30363d;
+    padding: 6px 12px;
+    margin-right: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background: #21262d;
+    border-bottom-color: #21262d;
+}
+QTextEdit {
+    background-color: #010409;
+    border: none;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    color: #e6edf3;
+    padding: 8px;
+}
+"""
 
-BACKEND_PORT   = 8000
-UI_PORT        = 3001
-UI_URL         = f"http://localhost:{UI_PORT}"
+SERVICES_DEF = [
+    ("docker", "🐳 Docker Compose", "Manage DB & Nginx"),
+    ("backend", "⚡ FastAPI", "Port 8000"),
+    ("monitor", "📂 Folder Monitor", "Watch local images"),
+    ("sync", "☁️ Cloud Sync", "Sync to MinIO Storage"),
+    ("ui", "🎨 React UI", "Port 3001"),
+]
 
-# ─── THEME ────────────────────────────────────────────────────────────────────
-BG           = "#0d1117"
-PANEL_BG     = "#161b22"
-CARD_BG      = "#1c2128"
-BORDER       = "#30363d"
-TEXT_MAIN    = "#e6edf3"
-TEXT_DIM     = "#7d8590"
-TEXT_SUB     = "#8b949e"
-GREEN        = "#3fb950"
-GREEN_DIM    = "#1a4a34"
-RED          = "#f85149"
-RED_DIM      = "#4a1a1a"
-YELLOW       = "#d29922"
-BLUE         = "#388bfd"
-BLUE_DIM     = "#1a2a4a"
-PURPLE       = "#bc8cff"
-
-# Service definitions: (key, icon, label, check_fn)
-# check_fn returns True if already running
-def docker_ok():
-    try:
-        r = subprocess.run(["docker", "info"], capture_output=True, timeout=4,
-                           creationflags=CREATION_FLAGS)
-        return r.returncode == 0
-    except Exception:
-        return False
-
+# ─── UTILS ────────────────────────────────────────────────────────────────────
 def port_open(port):
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=1):
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
             return True
     except OSError:
         return False
 
-def wait_port(port, timeout=90, interval=2):
-    t = time.time()
-    while time.time() - t < timeout:
-        if port_open(port): return True
-        time.sleep(interval)
-    return False
-
-def monitor_ok():
-    """Checks if folder_monitor.py is running by scanning the process list."""
-    try:
-        if IS_WINDOWS:
-            cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
-            r = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATION_FLAGS)
-            if r.returncode == 0 and r.stdout:
-                return "folder_monitor.py" in r.stdout
+# ─── CUSTOM WIDGETS ───────────────────────────────────────────────────────────
+class ServiceCard(QFrame):
+    def __init__(self, key, title, desc):
+        super().__init__()
+        self.key = key
+        self.setObjectName("ServiceCard")
+        self.setFixedHeight(90)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        
+        # Top row: title & status dot
+        top_layout = QHBoxLayout()
+        self.lbl_title = QLabel(title)
+        self.lbl_title.setStyleSheet("font-size: 15px; font-weight: bold;")
+        self.lbl_dot = QLabel("⚫")
+        self.lbl_dot.setStyleSheet("color: #7d8590; font-size: 14px;")
+        
+        top_layout.addWidget(self.lbl_dot)
+        top_layout.addWidget(self.lbl_title)
+        top_layout.addStretch()
+        
+        # Bottom row: desc & extra controls
+        bot_layout = QHBoxLayout()
+        self.lbl_desc = QLabel(desc)
+        self.lbl_desc.setStyleSheet("color: #8b949e; font-size: 12px;")
+        bot_layout.addWidget(self.lbl_desc)
+        bot_layout.addStretch()
+        
+        self.lbl_status = QLabel("Idle")
+        self.lbl_status.setStyleSheet("color: #7d8590; font-size: 12px; font-style: italic;")
+        bot_layout.addWidget(self.lbl_status)
+        
+        layout.addLayout(top_layout)
+        layout.addLayout(bot_layout)
+        
+    def set_status(self, state, text=None):
+        if state == "running":
+            self.lbl_dot.setStyleSheet("color: #d29922; font-size: 14px;")
+            self.lbl_status.setText(text or "Starting...")
+        elif state == "ok":
+            self.lbl_dot.setStyleSheet("color: #3fb950; font-size: 14px;")
+            self.lbl_status.setText(text or "Running")
+        elif state == "error":
+            self.lbl_dot.setStyleSheet("color: #f85149; font-size: 14px;")
+            self.lbl_status.setText(text or "Error")
         else:
-            r = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-            if r.returncode == 0 and r.stdout:
-                return "folder_monitor.py" in r.stdout
-        return False
-    except:
-        return False
+            self.lbl_dot.setStyleSheet("color: #7d8590; font-size: 14px;")
+            self.lbl_status.setText(text or "Idle")
 
-def sync_ok():
-    """Checks if sync_to_server.py is running."""
-    try:
-        if IS_WINDOWS:
-            cmd = ['wmic', 'process', 'where', "name='python.exe'", 'get', 'commandline']
-            r = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATION_FLAGS)
-            if r.returncode == 0 and r.stdout:
-                return "sync_to_server.py" in r.stdout
-        else:
-            r = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-            if r.returncode == 0 and r.stdout:
-                return "sync_to_server.py" in r.stdout
-        return False
-    except:
-        return False
-
-SERVICES = [
-    ("docker",   "🐳", "Docker Daemon",     lambda: docker_ok()),
-    ("db",       "🗄️", "Database & Nginx",  lambda: port_open(5433)),
-    ("backend",  "⚡", "FastAPI Backend",    lambda: port_open(BACKEND_PORT)),
-    ("monitor",  "📂", "Folder Monitor",    lambda: monitor_ok()),
-    ("sync",     "☁️", "Cloud Sync (MinIO)", lambda: sync_ok()),
-    ("ui",       "🎨", "Vite UI Server",     lambda: port_open(UI_PORT)),
-    ("browser",  "🌐", "Open Browser",       lambda: False),
-]
-
-STATE_COLORS = {
-    "idle":     TEXT_DIM,
-    "running":  YELLOW,
-    "ok":       GREEN,
-    "error":    RED,
-    "stopping": YELLOW,
-}
-STATE_TEXTS = {
-    "idle":     "Idle",
-    "running":  "Starting…",
-    "ok":       "✔  Running",
-    "error":    "✘  Failed",
-    "stopping": "Stopping…",
-}
-
-
-class LauncherApp(tk.Tk):
-
+# ─── MAIN APP ─────────────────────────────────────────────────────────────────
+class LauncherApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.title("NTUST AOI — Launcher")
-        self.geometry("780x800")
-        self.minsize(780, 680)
-        self.resizable(True, True)
-        self.configure(bg=BG)
-
-        self._proc_backend = None
-        self._proc_ui      = None
-        self._proc_monitor = None
-        self._dots  = {}
-        self._texts = {}
-        self._sync_enabled = tk.BooleanVar(value=True)
+        self.setWindowTitle("NTUST AOI Platform - Launcher")
+        self.resize(900, 700)
+        self.setStyleSheet(DARK_THEME_QSS)
+        
+        self.processes = {}
+        self.cards = {}
+        self.log_editors = {}
+        
+        # Track auto-start
+        self.is_starting = False
+        self.is_stopping = False
 
         self._build_ui()
-
-        # Auto-detect on startup
-        threading.Thread(target=self._detect_services, daemon=True).start()
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # UI LAYOUT
-    # ──────────────────────────────────────────────────────────────────────────
+        self._init_processes()
+        
+        # Auto-detect existing services
+        QTimer.singleShot(1000, self.detect_services)
 
     def _build_ui(self):
-        # ── Header ──────────────────────────────────────────────────────────
-        hdr = tk.Frame(self, bg=PANEL_BG, pady=20)
-        hdr.pack(fill="x")
-
-        tk.Label(hdr, text="🔬  NTUST AOI Platform",
-                 font=("Segoe UI", 22, "bold"), fg=TEXT_MAIN, bg=PANEL_BG
-                 ).pack()
-        tk.Label(hdr, text="Automated Optical Inspection — System Launcher",
-                 font=("Segoe UI", 10), fg=TEXT_DIM, bg=PANEL_BG
-                 ).pack(pady=(3, 0))
-
-        # Auto Adjust Button in Header
-        self._btn_fit = tk.Button(
-            hdr, text="⛶  Auto Fit", font=("Segoe UI", 8, "bold"),
-            bg=BORDER, fg=TEXT_DIM, relief="flat", padx=8, pady=2,
-            activebackground=CARD_BG, activeforeground=TEXT_MAIN,
-            cursor="hand2", command=self._auto_size
-        )
-        self._btn_fit.place(relx=0.98, rely=0.1, anchor="ne")
-
-        # ── Service cards ────────────────────────────────────────────────────
-        cards = tk.Frame(self, bg=BG, padx=24, pady=6)
-        cards.pack(fill="x")
-
-        tk.Label(cards, text="Service Status",
-                 font=("Segoe UI", 9, "bold"), fg=TEXT_DIM, bg=BG, anchor="w"
-                 ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
-
-        # Setup 2 columns
-        cards.columnconfigure(0, weight=1)
-        cards.columnconfigure(1, weight=1)
-
-        for idx, (key, icon, label, _) in enumerate(SERVICES):
-            card = tk.Frame(cards, bg=CARD_BG, pady=6, padx=14,
-                            highlightbackground=BORDER, highlightthickness=1)
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
+        
+        # Header
+        header = QLabel("🔬 NTUST AOI System Control Center")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
+        main_layout.addWidget(header)
+        
+        # Tabs
+        self.tabs = QTabWidget()
+        main_layout.addWidget(self.tabs)
+        
+        # Tab 1: Dashboard
+        tab_dash = QWidget()
+        dash_layout = QVBoxLayout(tab_dash)
+        dash_layout.setContentsMargins(16, 16, 16, 16)
+        
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        for i, (key, title, desc) in enumerate(SERVICES_DEF):
+            card = ServiceCard(key, title, desc)
+            self.cards[key] = card
+            grid.addWidget(card, i // 2, i % 2)
             
-            # Grid placement (2 columns)
-            r = (idx // 2) + 1
-            c = idx % 2
+        dash_layout.addLayout(grid)
+        dash_layout.addStretch()
+        
+        # Action Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_start = QPushButton("▶ Start All Services")
+        self.btn_start.setObjectName("BtnStart")
+        self.btn_start.setFixedHeight(45)
+        self.btn_start.clicked.connect(self.start_all)
+        
+        self.btn_stop = QPushButton("⏹ Stop All Services")
+        self.btn_stop.setObjectName("BtnStop")
+        self.btn_stop.setFixedHeight(45)
+        self.btn_stop.clicked.connect(self.stop_all)
+        self.btn_stop.setEnabled(False)
+        
+        self.btn_ui = QPushButton("🌐 Open Operator Dashboard")
+        self.btn_ui.setFixedHeight(45)
+        self.btn_ui.clicked.connect(lambda: webbrowser.open("http://localhost:3001"))
+        self.btn_ui.setEnabled(False)
+        
+        btn_layout.addWidget(self.btn_start, 2)
+        btn_layout.addWidget(self.btn_stop, 2)
+        btn_layout.addWidget(self.btn_ui, 1)
+        dash_layout.addLayout(btn_layout)
+        
+        self.tabs.addTab(tab_dash, "Dashboard")
+        
+        # Tab 2: Logs
+        self.tab_logs = QTabWidget()
+        self._add_log_tab("General", "system")
+        for key, _, _ in SERVICES_DEF:
+            self._add_log_tab(key.capitalize(), key)
             
-            # If it's the last service and odd count, let it span 2 columns
-            if idx == len(SERVICES) - 1 and len(SERVICES) % 2 != 0:
-                card.grid(row=r, column=c, columnspan=2, sticky="ew", padx=3, pady=3)
+        # Log controls
+        log_ctrl_layout = QHBoxLayout()
+        btn_clear = QPushButton("Clear Logs")
+        btn_clear.clicked.connect(self._clear_logs)
+        log_ctrl_layout.addStretch()
+        log_ctrl_layout.addWidget(btn_clear)
+        
+        log_container = QWidget()
+        log_container_layout = QVBoxLayout(log_container)
+        log_container_layout.addWidget(self.tab_logs)
+        log_container_layout.addLayout(log_ctrl_layout)
+        self.tabs.addTab(log_container, "System Logs")
+        
+        # Tab 3: Settings
+        tab_set = QWidget()
+        set_layout = QVBoxLayout(tab_set)
+        
+        # Monitor Folder Setting
+        form_layout = QGridLayout()
+        form_layout.setSpacing(10)
+        
+        lbl_monitor = QLabel("Monitor Image Folder (IMAGE_WATCH_DIR):")
+        self.txt_monitor_dir = QLineEdit()
+        self.txt_monitor_dir.setPlaceholderText("Select folder to monitor incoming images...")
+        btn_browse = QPushButton("Browse...")
+        btn_browse.clicked.connect(self._browse_monitor_dir)
+        
+        form_layout.addWidget(lbl_monitor, 0, 0)
+        form_layout.addWidget(self.txt_monitor_dir, 0, 1)
+        form_layout.addWidget(btn_browse, 0, 2)
+        
+        lbl_minio = QLabel("MinIO Endpoint:")
+        self.txt_minio = QLineEdit()
+        form_layout.addWidget(lbl_minio, 1, 0)
+        form_layout.addWidget(self.txt_minio, 1, 1, 1, 2)
+        
+        set_layout.addLayout(form_layout)
+        
+        self.chk_auto_sync = QCheckBox("Enable Cloud Sync on Start")
+        self.chk_auto_sync.setChecked(True)
+        set_layout.addWidget(self.chk_auto_sync)
+        
+        btn_save_settings = QPushButton("💾 Save Settings")
+        btn_save_settings.clicked.connect(self._save_settings)
+        btn_save_settings.setFixedWidth(200)
+        
+        set_layout.addSpacing(20)
+        set_layout.addWidget(btn_save_settings, alignment=Qt.AlignCenter)
+        set_layout.addStretch()
+        self.tabs.addTab(tab_set, "Settings")
+        
+        self._load_settings()
+
+    def _load_settings(self):
+        env_path = os.path.join(DB_DIR, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                for line in content.splitlines():
+                    if line.startswith("IMAGE_WATCH_DIR="):
+                        self.txt_monitor_dir.setText(line.split("=", 1)[1].strip())
+                    elif line.startswith("MINIO_ENDPOINT="):
+                        self.txt_minio.setText(line.split("=", 1)[1].strip())
+
+    def _browse_monitor_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Monitor Directory")
+        if d:
+            self.txt_monitor_dir.setText(d)
+
+    def _save_settings(self):
+        env_path = os.path.join(DB_DIR, ".env")
+        if not os.path.exists(env_path):
+            QMessageBox.warning(self, "Error", ".env file not found!")
+            return
+            
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            
+        new_lines = []
+        for line in lines:
+            if line.startswith("IMAGE_WATCH_DIR="):
+                new_lines.append(f"IMAGE_WATCH_DIR={self.txt_monitor_dir.text().strip()}\n")
+            elif line.startswith("MINIO_ENDPOINT="):
+                new_lines.append(f"MINIO_ENDPOINT={self.txt_minio.text().strip()}\n")
             else:
-                card.grid(row=r, column=c, sticky="ew", padx=3, pady=3)
+                new_lines.append(line)
+                
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+            
+        QMessageBox.information(self, "Success", "Settings saved successfully to .env!\n\nPlease Stop and Restart services to apply changes.")
 
-            dot = tk.Label(card, text="●", font=("Segoe UI", 14),
-                           fg=TEXT_DIM, bg=CARD_BG)
-            dot.pack(side="left", padx=(0, 8))
+    def _add_log_tab(self, label, key):
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        self.log_editors[key] = txt
+        self.tab_logs.addTab(txt, label)
 
-            icon_lbl = tk.Label(card, text=icon, font=("Segoe UI", 12),
-                                fg=TEXT_MAIN, bg=CARD_BG, width=3)
-            icon_lbl.pack(side="left")
+    def log_msg(self, msg, key="system"):
+        txt = self.log_editors.get(key)
+        if txt:
+            txt.append(msg)
+            scrollbar = txt.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+        # Also copy important stuff to system log
+        if key != "system":
+            self.log_editors["system"].append(f"[{key.upper()}] {msg}")
 
-            tk.Label(card, text=label, font=("Segoe UI", 10, "bold"),
-                     fg=TEXT_MAIN, bg=CARD_BG, anchor="w").pack(side="left", padx=4)
+    def _clear_logs(self):
+        for txt in self.log_editors.values():
+            txt.clear()
 
-            state_lbl = tk.Label(card, text="Checking…",
-                                 font=("Segoe UI", 9, "italic"),
-                                 fg=TEXT_DIM, bg=CARD_BG)
-            state_lbl.pack(side="right", padx=6)
+    # ─── PROCESS MANAGEMENT ───────────────────────────────────────────────────
+    def _init_processes(self):
+        # We will use QProcess for background services.
+        pass
 
-            # Add Master Toggle for Sync service
-            if key == "sync":
-                chk = tk.Checkbutton(
-                    card, text="Enabled", variable=self._sync_enabled,
-                    bg=CARD_BG, fg=TEXT_DIM, activebackground=CARD_BG,
-                    activeforeground=TEXT_MAIN, selectcolor=BG,
-                    font=("Segoe UI", 8), cursor="hand2",
-                    command=self._on_sync_toggle
-                )
-                chk.pack(side="right", padx=6)
+    def _create_process(self, key):
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.MergedChannels)
+        proc.readyReadStandardOutput.connect(lambda k=key, p=proc: self._handle_stdout(k, p))
+        proc.finished.connect(lambda exitCode, exitStatus, k=key: self._handle_finished(k, exitCode))
+        return proc
 
-            self._dots[key]  = dot
-            self._texts[key] = state_lbl
+    def _handle_stdout(self, key, proc):
+        data = proc.readAllStandardOutput().data().decode("utf-8", errors="replace")
+        for line in data.splitlines():
+            if line.strip():
+                self.log_msg(line.strip(), key)
 
-        # ── Button bar (Pack early at bottom to ensure visibility) ──────────
-        sep = tk.Frame(self, bg=BORDER, height=1)
-        sep.pack(side="bottom", fill="x")
-
-        bar = tk.Frame(self, bg=PANEL_BG, pady=18, padx=24)
-        bar.pack(side="bottom", fill="x")
-
-        # START button
-        self._btn_start = self._make_btn(
-            bar, "▶   Start All Services",
-            bg=BLUE, fg="white", abg="#2563eb",
-            padx=32, pady=14, font_size=13,
-            cmd=self._on_start
-        )
-        self._btn_start.pack(side="left")
-
-        # OPEN UI button
-        self._btn_open = self._make_btn(
-            bar, "🌐   Open UI",
-            bg=CARD_BG, fg=TEXT_DIM, abg=BORDER,
-            padx=24, pady=14, font_size=12,
-            cmd=lambda: webbrowser.open(UI_URL),
-            state="disabled"
-        )
-        self._btn_open.pack(side="left", padx=10)
-
-        # CLOSE SERVICES button
-        self._btn_close = self._make_btn(
-            bar, "⏹   Close Services",
-            bg=RED_DIM, fg=RED, abg="#5a1a1a",
-            padx=24, pady=14, font_size=12,
-            cmd=self._on_close_services,
-            state="disabled"
-        )
-        self._btn_close.pack(side="left")
-
-        # Status label on right
-        self._status_lbl = tk.Label(
-            bar, text="", font=("Segoe UI", 10, "italic"),
-            fg=TEXT_DIM, bg=PANEL_BG
-        )
-        self._status_lbl.pack(side="right")
-
-        # ── Log (Takes remaining space) ─────────────────────────────────────
-        log_outer = tk.Frame(self, bg=BG, padx=24)
-        log_outer.pack(fill="both", expand=True, pady=(0, 4))
-
-        tk.Label(log_outer, text="Output Log",
-                 font=("Segoe UI", 9, "bold"), fg=TEXT_DIM, bg=BG, anchor="w"
-                 ).pack(fill="x", pady=(0, 4))
-
-        self._log = scrolledtext.ScrolledText(
-            log_outer, height=14, font=("Consolas", 9),
-            bg="#090d12", fg="#8b949e", insertbackground=TEXT_MAIN,
-            borderwidth=0, highlightthickness=1,
-            highlightbackground=BORDER, relief="flat", state="disabled"
-        )
-        self._log.pack(fill="both", expand=True)
-        self._log.tag_config("ok",   foreground=GREEN)
-        self._log.tag_config("err",  foreground=RED)
-        self._log.tag_config("info", foreground=BLUE)
-        self._log.tag_config("warn", foreground=YELLOW)
-
-    def _make_btn(self, parent, text, bg, fg, abg,
-                  padx, pady, font_size, cmd, state="normal"):
-        btn = tk.Button(
-            parent, text=text,
-            font=("Segoe UI", font_size, "bold"),
-            bg=bg, fg=fg, activebackground=abg, activeforeground=fg,
-            relief="flat", padx=padx, pady=pady,
-            cursor="hand2", command=cmd, state=state,
-            bd=0, highlightthickness=0
-        )
-        return btn
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # LOG HELPERS
-    # ──────────────────────────────────────────────────────────────────────────
-
-    def _log_write(self, msg, tag=""):
-        def _do():
-            self._log.configure(state="normal")
-            ts = time.strftime("%H:%M:%S")
-            self._log.insert("end", f"[{ts}] {msg}\n", tag)
-            self._log.see("end")
-            self._log.configure(state="disabled")
-        self.after(0, _do)
-
-    def _set_service(self, key, state):
-        color = STATE_COLORS.get(state, TEXT_DIM)
-        text  = STATE_TEXTS.get(state, "")
-        def _do():
-            if key in self._dots:  self._dots[key].config(fg=color)
-            if key in self._texts: self._texts[key].config(fg=color, text=text)
-        self.after(0, _do)
-
-    def _set_status(self, msg, color=None):
-        self.after(0, lambda: self._status_lbl.config(
-            text=msg, fg=color or TEXT_DIM))
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # AUTO-DETECT on startup
-    # ──────────────────────────────────────────────────────────────────────────
-
-    def _detect_services(self):
-        """Check which services are already running and update UI accordingly."""
-        self._log_write("Checking existing services…", "info")
-        self._set_status("Detecting services…")
-
-        all_checks = [
-            ("docker",  "Docker Daemon",   docker_ok,             None),
-            ("db",      "Database",        lambda: port_open(5433), 5433),
-            ("backend", "FastAPI Backend", lambda: port_open(BACKEND_PORT), BACKEND_PORT),
-            ("monitor", "Folder Monitor",  monitor_ok,            None),
-            ("ui",      "Vite UI",         lambda: port_open(UI_PORT), UI_PORT),
-        ]
-
-        any_running = False
-        all_running = True
-
-        for key, name, check_fn, _ in all_checks:
-            is_up = check_fn()
-            if is_up:
-                self._set_service(key, "ok")
-                self._log_write(f"  {name}: already running ✓", "ok")
-                any_running = True
-            else:
-                self._set_service(key, "idle")
-                self._log_write(f"  {name}: not running", "warn")
-                all_running = False
-
-        # Browser is never "pre-detected"
-        self._set_service("browser", "idle")
-
-        if all_running:
-            self._log_write("All services already running! Ready to use.", "ok")
-            self._set_status("✅  All services running", GREEN)
-            self.after(0, self._activate_running_state)
-        elif any_running:
-            self._log_write("Some services running. You can start missing ones or close all.", "warn")
-            self._set_status("⚠️  Partial services detected", YELLOW)
-            self.after(0, lambda: self._btn_close.config(state="normal"))
-            self.after(0, lambda: self._btn_start.config(text="▶   Start Missing Services"))
-            if port_open(UI_PORT):
-                self.after(0, lambda: self._btn_open.config(state="normal", fg=GREEN))
+    def _handle_finished(self, key, exitCode):
+        if self.is_stopping:
+            self.cards[key].set_status("idle", "Stopped")
         else:
-            self._log_write("No services running. Click 'Start All Services'.", "info")
-            self._set_status("Ready to start", TEXT_DIM)
+            self.cards[key].set_status("error", f"Exited ({exitCode})")
+            self.log_msg(f"Process {key} exited unexpectedly with code {exitCode}", key)
 
-    def _activate_running_state(self):
-        """All services are running — update buttons accordingly."""
-        self._btn_start.config(text="✓  All Running", bg=GREEN, state="disabled")
-        self._btn_open.config(state="normal", fg=GREEN, bg=CARD_BG)
-        self._btn_close.config(state="normal")
-        self._set_service("browser", "ok")
+    def detect_services(self):
+        self.log_msg("Detecting running services...", "system")
+        running_count = 0
+        
+        # Naive check by ports
+        if port_open(5433):
+            self.cards["docker"].set_status("ok", "Already running")
+            running_count += 1
+        if port_open(8000):
+            self.cards["backend"].set_status("ok", "Already running")
+            running_count += 1
+        if port_open(3001):
+            self.cards["ui"].set_status("ok", "Already running")
+            running_count += 1
+            
+        if running_count > 0:
+            self.log_msg(f"Detected {running_count} services already running.", "system")
+            self.btn_start.setEnabled(False)
+            self.btn_start.setText("🟢 System Running")
+            self.btn_stop.setEnabled(True)
+            self.btn_stop.setText("⏹ Stop All Services")
+            if port_open(3001):
+                self.btn_ui.setEnabled(True)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # START ALL
-    # ──────────────────────────────────────────────────────────────────────────
-
-    def _on_start(self):
-        self._btn_start.config(state="disabled", text="Starting…", bg=YELLOW)
-        self._btn_close.config(state="disabled")
-        threading.Thread(target=self._run_all, daemon=True).start()
-
-    def _run_all(self):
-        self._log_write("\n=== Starting NTUST AOI Services ===", "info")
-
+    def start_all(self):
+        self.is_starting = True
+        self.is_stopping = False
+        
+        # UI State: Starting
+        self.btn_start.setEnabled(False)
+        self.btn_start.setText("⏳ Starting Services...")
+        self.btn_stop.setEnabled(False)
+        self.btn_ui.setEnabled(False)
+        
+        self.log_msg("Starting all services...", "system")
+        
         # 1. Docker
-        self._set_service("docker", "running")
-        self._set_status("Checking Docker…")
+        self.cards["docker"].set_status("running")
+        self.log_msg("Running docker-compose up -d...", "docker")
+        proc_doc = self._create_process("docker")
+        proc_doc.setWorkingDirectory(DB_DIR)
+        proc_doc.start(DOCKER_EXE, ["compose", "up", "-d"])
+        self.processes["docker"] = proc_doc
+        
+        # We use a timer to wait for docker to finish before starting others 
+        # (in a real app we'd chain them, but here we'll just delay a bit for visual)
+        QTimer.singleShot(2000, self.start_backend_and_scripts)
 
-        if not docker_ok():
-            self._log_write("Docker not running — launching Docker Desktop…", "warn")
-            try:
-                if IS_WINDOWS:
-                    subprocess.Popen([DOCKER_DESKTOP], creationflags=CREATION_FLAGS)
-                else:
-                    subprocess.Popen(["open", "-a", "Docker"])
-            except FileNotFoundError:
-                self._log_write("Docker Desktop not found. Please start it manually.", "err")
-            self._log_write("Waiting for Docker daemon (up to 120s)…", "warn")
-            deadline = time.time() + 120
-            ok = False
-            while time.time() < deadline:
-                if docker_ok():
-                    ok = True; break
-                time.sleep(3)
-            if not ok:
-                self._log_write("ERROR: Docker did not start in time.", "err")
-                self._set_service("docker", "error")
-                self._on_fail(); return
-
-        self._set_service("docker", "ok")
-        self._log_write("Docker daemon ready ✓", "ok")
-
-        # 2. DB
-        self._set_service("db", "running")
-        self._set_status("Starting DB services…")
-        self._log_write("docker compose up -d …", "info")
-
-        if not port_open(5433):
-            self._log_write("Launching docker containers…", "info")
-            try:
-                ret = subprocess.run(
-                    ["docker", "compose", "up", "-d"],
-                    cwd=DB_DIR,
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    creationflags=CREATION_FLAGS,
-                    timeout=60
-                )
-                if ret.returncode != 0:
-                    self._log_write("docker compose up returned non-zero. Checking port anyway…", "warn")
-            except subprocess.TimeoutExpired:
-                self._log_write("docker compose up timed out (60s) — checking if port opened anyway…", "warn")
-            except Exception as e:
-                self._log_write(f"docker compose up error: {e}", "err")
-                self._set_service("db", "error")
-                self._on_fail(); return
-            self._log_write("Waiting for PostgreSQL (port 5433)…", "info")
-            if not wait_port(5433, timeout=60):
-                self._log_write("ERROR: PostgreSQL did not become ready.", "err")
-                self._set_service("db", "error")
-                self._on_fail(); return
+    def start_backend_and_scripts(self):
+        self.cards["docker"].set_status("ok")
+        
+        # 2. FastAPI
+        if not port_open(8000):
+            self.cards["backend"].set_status("running")
+            proc_be = self._create_process("backend")
+            proc_be.setWorkingDirectory(DB_DIR)
+            proc_be.start(PYTHON_EXE, ["-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"])
+            self.processes["backend"] = proc_be
+            self.cards["backend"].set_status("ok")
+        
+        # 3. Monitor
+        self.cards["monitor"].set_status("running")
+        proc_mon = self._create_process("monitor")
+        proc_mon.setWorkingDirectory(DB_DIR)
+        proc_mon.start(PYTHON_EXE, ["scripts/folder_monitor.py"])
+        self.processes["monitor"] = proc_mon
+        self.cards["monitor"].set_status("ok")
+        
+        # 4. Sync
+        if self.chk_auto_sync.isChecked():
+            self.cards["sync"].set_status("running")
+            proc_sync = self._create_process("sync")
+            proc_sync.setWorkingDirectory(DB_DIR)
+            proc_sync.start(PYTHON_EXE, ["scripts/sync_to_server.py"])
+            self.processes["sync"] = proc_sync
+            self.cards["sync"].set_status("ok")
         else:
-            self._log_write("Database was already running ✓", "ok")
+            self.cards["sync"].set_status("idle", "Disabled")
 
-        self._set_service("db", "ok")
-        self._log_write("Database & Nginx ready ✓", "ok")
+        # 5. UI
+        if not port_open(3001):
+            self.cards["ui"].set_status("running")
+            proc_ui = self._create_process("ui")
+            proc_ui.setWorkingDirectory(UI_DIR)
+            proc_ui.start(NPM_EXE, ["run", "dev"])
+            self.processes["ui"] = proc_ui
+            self.cards["ui"].set_status("ok")
+            
+        self.log_msg("All services startup sequence triggered.", "system")
+        
+        # UI State: Running
+        self.btn_start.setText("🟢 System Running")
+        self.btn_stop.setEnabled(True)
+        self.btn_ui.setEnabled(True)
+        self.is_starting = False
 
-        # 3. FastAPI
-        self._set_service("backend", "running")
-        self._set_status("Starting API server…")
+    def stop_all(self, exit_after=False):
+        reply = QMessageBox.question(self, "Confirm Stop", 
+            "Are you sure you want to stop all services?\nThis will interrupt active connections to PLC and AI nodes.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            
+        if reply == QMessageBox.No:
+            return
 
-        if not port_open(BACKEND_PORT):
-            self._log_write("Starting FastAPI backend on port 8000…", "info")
-            self._proc_backend = subprocess.Popen(
-                [PYTHON_EXE, "-c",
-                 "import uvicorn; uvicorn.run('api.main:app', host='0.0.0.0', port=8000)"],
-                cwd=DB_DIR,
-                creationflags=CREATION_FLAGS
-            )
-            if not wait_port(BACKEND_PORT, timeout=30):
-                self._log_write("ERROR: FastAPI backend did not start.", "err")
-                self._set_service("backend", "error")
-                self._on_fail(); return
+        self.is_stopping = True
+        
+        # UI State: Stopping
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.setText("⏳ Stopping Services...")
+        self.btn_start.setEnabled(False)
+        self.btn_ui.setEnabled(False)
+        
+        self.log_msg("Stopping all services...", "system")
+        
+        # Terminate QProcesses
+        for key, proc in self.processes.items():
+            if key != "docker" and proc.state() != QProcess.NotRunning:
+                self.cards[key].set_status("running", "Stopping...")
+                proc.terminate()
+                if not proc.waitForFinished(5000):  # Wait up to 5s gracefully
+                    proc.kill()
+                self.cards[key].set_status("idle", "Stopped")
+        
+        # Stop Docker without freezing UI completely
+        self.cards["docker"].set_status("running", "Stopping...")
+        self.log_msg("Running docker-compose down...", "docker")
+        
+        proc_doc = self._create_process("docker")
+        proc_doc.setWorkingDirectory(DB_DIR)
+        proc_doc.start(DOCKER_EXE, ["compose", "down"])
+        
+        # Wait asynchronously to avoid UI freeze
+        while not proc_doc.waitForFinished(100):
+            QApplication.processEvents()
+            
+        self.cards["docker"].set_status("idle", "Stopped")
+        
+        self.processes.clear()
+        self.log_msg("All services stopped successfully.", "system")
+        
+        # UI State: Idle (Stopped)
+        self.btn_stop.setText("⏹ Stop All Services")
+        self.btn_start.setEnabled(True)
+        self.btn_start.setText("▶ Start All Services")
+        self.is_stopping = False
+        
+        if exit_after:
+            QApplication.quit()
+
+    def closeEvent(self, event):
+        if self.processes and not self.is_stopping:
+            reply = QMessageBox.question(self, "Confirm Exit", 
+                "Services are still running in the background.\nDo you want to stop them and exit?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            
+            if reply == QMessageBox.Yes:
+                event.ignore()
+                self.stop_all(exit_after=True)
+            else:
+                event.ignore()
         else:
-            self._log_write("FastAPI was already running ✓", "ok")
-
-        self._set_service("backend", "ok")
-        self._log_write("FastAPI backend ready at http://localhost:8000 ✓", "ok")
-
-        # 3.5 Folder Monitor
-        self._set_service("monitor", "running")
-        self._set_status("Starting Folder Monitor…")
-        if not monitor_ok():
-            self._proc_monitor = subprocess.Popen(
-                [PYTHON_EXE, FOLDER_MONITOR_PY],
-                cwd=DB_DIR,
-                creationflags=CREATION_FLAGS
-            )
-            time.sleep(1)
-        self._set_service("monitor", "ok")
-
-        # 3.6 Cloud Sync
-        if self._sync_enabled.get():
-            self._set_service("sync", "running")
-            self._set_status("Starting Cloud Sync…")
-            if not sync_ok():
-                sync_script = os.path.join(DB_DIR, "scripts", "sync_to_server.py")
-                self._proc_sync = subprocess.Popen(
-                    [PYTHON_EXE, sync_script],
-                    cwd=DB_DIR,
-                    creationflags=CREATION_FLAGS
-                )
-                time.sleep(1)
-            self._set_service("sync", "ok")
-        else:
-            self._set_service("sync", "idle")
-            self._log_write("Cloud Sync is disabled by user — skipping.", "warn")
-
-        # 4. Vite UI
-        self._set_service("ui", "running")
-        self._set_status("Starting UI server…")
-
-        if not port_open(UI_PORT):
-            self._log_write(f"Starting Vite UI on port {UI_PORT}…", "info")
-            self._proc_ui = subprocess.Popen(
-                [NPM_EXE, "run", "dev"],
-                cwd=UI_DIR,
-                creationflags=CREATION_FLAGS
-            )
-            if not wait_port(UI_PORT, timeout=60):
-                self._log_write("ERROR: Vite UI server did not start.", "err")
-                self._set_service("ui", "error")
-                self._on_fail(); return
-        else:
-            self._log_write("Vite UI was already running ✓", "ok")
-
-        self._set_service("ui", "ok")
-        self._log_write(f"UI server ready at {UI_URL} ✓", "ok")
-
-        # 5. Browser
-        self._set_service("browser", "running")
-        self._set_status("Opening browser…")
-        time.sleep(1)
-        webbrowser.open(UI_URL)
-        self._set_service("browser", "ok")
-        self._log_write(f"Browser opened at {UI_URL} ✓", "ok")
-
-        # Done
-        self._log_write("\n" + "─" * 52, "ok")
-        self._log_write("  ✅  All systems running!", "ok")
-        self._log_write(f"  🌐  {UI_URL}", "ok")
-        self._log_write("─" * 52, "ok")
-        self._set_status("✅  All systems running!", GREEN)
-        self.after(0, self._activate_running_state)
-
-    def _on_fail(self):
-        self._set_status("Startup failed — check log", RED)
-        self.after(0, lambda: self._btn_start.config(
-            text="▶   Retry", bg=RED, state="normal"))
-        self.after(0, lambda: self._btn_close.config(state="normal"))
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # CLOSE ALL SERVICES
-    # ──────────────────────────────────────────────────────────────────────────
-
-    def _on_close_services(self):
-        self._btn_close.config(state="disabled", text="Stopping…")
-        self._btn_start.config(state="disabled")
-        self._btn_open.config(state="disabled")
-        threading.Thread(target=self._shutdown_all, daemon=True).start()
-
-    def _shutdown_all(self):
-        self._log_write("\n=== Shutting down all services ===", "warn")
-        self._set_status("Stopping services…", YELLOW)
-
-        # Kill Vite
-        if self._proc_ui and self._proc_ui.poll() is None:
-            self._log_write("Stopping Vite UI…", "warn")
-            self._set_service("ui", "stopping")
-            if IS_WINDOWS:
-                try:
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self._proc_ui.pid)], 
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=CREATION_FLAGS, timeout=3)
-                except Exception:
-                    pass
-            else:
-                self._proc_ui.terminate()
-                try:    self._proc_ui.wait(timeout=3)
-                except: self._proc_ui.kill()
-        self._set_service("ui", "idle")
-        self._log_write("Vite UI stopped ✓", "ok")
-
-        # Kill FastAPI
-        if self._proc_backend and self._proc_backend.poll() is None:
-            self._log_write("Stopping FastAPI…", "warn")
-            self._set_service("backend", "stopping")
-            if IS_WINDOWS:
-                try:
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self._proc_backend.pid)], 
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=CREATION_FLAGS, timeout=3)
-                except Exception:
-                    pass
-            else:
-                self._proc_backend.terminate()
-                try:    self._proc_backend.wait(timeout=3)
-                except: self._proc_backend.kill()
-        self._set_service("backend", "idle")
-        self._log_write("FastAPI stopped ✓", "ok")
-
-        # Kill Monitor
-        if monitor_ok():
-            self._log_write("Stopping Folder Monitor…", "warn")
-            self._set_service("monitor", "stopping")
-            if IS_WINDOWS:
-                try:
-                    subprocess.run(['wmic', 'process', 'where', "commandline like '%folder_monitor.py%'", 'call', 'terminate'], 
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=CREATION_FLAGS, timeout=3)
-                except Exception:
-                    pass
-                try:
-                    subprocess.run(["taskkill", "/F", "/FI", "IMAGENAME eq python.exe", "/FI", "WINDOWTITLE eq *folder_monitor*"], 
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=CREATION_FLAGS, timeout=3)
-                except Exception:
-                    pass
-            else:
-                try:
-                    subprocess.run(['pkill', '-f', 'folder_monitor.py'], timeout=3)
-                except Exception:
-                    pass
-
-            if self._proc_monitor:
-                try: self._proc_monitor.terminate(); self._proc_monitor.kill()
-                except: pass
-        self._set_service("monitor", "idle")
-        self._log_write("Folder Monitor stopped ✓", "ok")
-
-        # Kill Sync
-        if sync_ok():
-            self._log_write("Stopping Cloud Sync…", "warn")
-            self._set_service("sync", "stopping")
-            if IS_WINDOWS:
-                try:
-                    subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=CREATION_FLAGS, timeout=3)
-                except Exception:
-                    pass
-            else:
-                try:
-                    subprocess.run(['pkill', '-f', 'sync_to_server.py'], timeout=3)
-                except Exception:
-                    pass
-
-            if hasattr(self, '_proc_sync') and self._proc_sync:
-                try: self._proc_sync.terminate(); self._proc_sync.kill()
-                except: pass
-        self._set_service("sync", "idle")
-        self._log_write("Cloud Sync stopped ✓", "ok")
-
-        # docker compose down
-        self._log_write("Running docker compose down…", "warn")
-        self._set_service("db", "stopping")
-        try:
-            ret = subprocess.run(
-                ["docker", "compose", "down"],
-                cwd=DB_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-                creationflags=CREATION_FLAGS, timeout=15
-            )
-            if ret.returncode == 0:
-                self._log_write("Docker services stopped ✓", "ok")
-            else:
-                self._log_write(f"docker compose down: {ret.stderr.strip()}", "err")
-        except subprocess.TimeoutExpired:
-            self._log_write("Docker compose down timed out (took > 15s) — forcing closure.", "warn")
-        except Exception as e:
-            self._log_write(f"Docker compose down failed: {str(e)}", "err")
-
-        self._set_service("db", "idle")
-        self._set_service("docker", "idle")
-        self._set_service("browser", "idle")
-
-        self._log_write("All services stopped. Closing…", "ok")
-        self._set_status("Done. Closing…", GREEN)
-        time.sleep(1.5)
-        self.after(0, self.destroy)
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # ─── WINDOW HELPERS ────────────────────────────────────────────────────────
-    def _auto_size(self):
-        """Fit window to content or center it."""
-        try:
-            # Try to expand to full height if it's currently small
-            if self.winfo_height() < 800:
-                self.geometry("740x850")
-            else:
-                self.geometry("740x720")
-            self.update_idletasks()
-        except Exception:
-            pass
-
-    def _on_sync_toggle(self):
-        """Called when the 'Enabled' checkbox for Cloud Sync is clicked."""
-        is_enabled = self._sync_enabled.get()
-        if not is_enabled:
-            self._log_write("Cloud Sync disabled by user.", "warn")
-            # If it's running, stop it
-            if sync_ok():
-                self._shutdown_sync_only()
-        else:
-            self._log_write("Cloud Sync enabled.", "info")
-
-    def _shutdown_sync_only(self):
-        self._log_write("Stopping Cloud Sync service...", "warn")
-        if IS_WINDOWS:
-            subprocess.run(['wmic', 'process', 'where', "commandline like '%sync_to_server.py%'", 'call', 'terminate'], 
-                           creationflags=CREATION_FLAGS)
-        else:
-            subprocess.run(['pkill', '-f', 'sync_to_server.py'])
-        self._set_service("sync", "idle")
-
-    def on_close(self):
-        self.destroy()
-
+            event.accept()
 
 if __name__ == "__main__":
-    try:
-        app = LauncherApp()
-        app.protocol("WM_DELETE_WINDOW", app.on_close)
-        app.mainloop()
-    except Exception as e:
-        if IS_WINDOWS:
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(0, f"Launcher Error:\n{str(e)}", "Startup Error", 0x10)
-        else:
-            print(f"Launcher Error: {e}")
+    app = QApplication(sys.argv)
+    window = LauncherApp()
+    window.show()
+    sys.exit(app.exec())
