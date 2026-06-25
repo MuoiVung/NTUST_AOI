@@ -100,11 +100,12 @@ QTextEdit {
 """
 
 SERVICES_DEF = [
-    ("docker", "🐳 Docker Compose", "Manage DB & Nginx"),
-    ("backend", "⚡ FastAPI", "Port 8000"),
-    ("monitor", "📂 Folder Monitor", "Watch local images"),
-    ("sync", "☁️ Cloud Sync", "Sync to MinIO Storage"),
-    ("ui", "🎨 React UI", "Port 3001"),
+    ("docker", "🐳 Docker", "Manage DB & Nginx"),
+    ("backend", "⚡ API", "FastAPI Port 8000"),
+    ("machine", "⚙️ PLC", "Core Machine Logic"),
+    ("monitor", "📷 Camera", "Folder Monitor"),
+    ("sync", "☁️ Cloud", "Sync to MinIO"),
+    ("ui", "🎨 Web UI", "React Port 3001"),
 ]
 
 # ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ class ServiceCard(QFrame):
 class LauncherApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NTUST AOI Platform - Launcher")
+        self.setWindowTitle("AOI Platform - Launcher")
         self.resize(900, 700)
         self.setStyleSheet(DARK_THEME_QSS)
         
@@ -194,7 +195,7 @@ class LauncherApp(QMainWindow):
         main_layout.setSpacing(16)
         
         # Header
-        header = QLabel("🔬 NTUST AOI System Control Center")
+        header = QLabel("🔬 AOI System Control Center")
         header.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
         main_layout.addWidget(header)
         
@@ -245,8 +246,10 @@ class LauncherApp(QMainWindow):
         # Tab 2: Logs
         self.tab_logs = QTabWidget()
         self._add_log_tab("General", "system")
-        for key, _, _ in SERVICES_DEF:
-            self._add_log_tab(key.capitalize(), key)
+        for key, title, _ in SERVICES_DEF:
+            # Extract just the name after the emoji for the tab label
+            name = title.split(" ", 1)[-1]
+            self._add_log_tab(name, key)
             
         # Log controls
         log_ctrl_layout = QHBoxLayout()
@@ -379,10 +382,13 @@ class LauncherApp(QMainWindow):
                 self.log_msg(line.strip(), key)
 
     def _handle_finished(self, key, exitCode):
-        if self.is_stopping:
-            self.cards[key].set_status("idle", "Stopped")
-        else:
-            self.cards[key].set_status("error", f"Exited ({exitCode})")
+        if key in self.cards:
+            if self.is_stopping:
+                self.cards[key].set_status("idle", "Stopped")
+            else:
+                self.cards[key].set_status("error", f"Exited ({exitCode})")
+        
+        if not self.is_stopping:
             self.log_msg(f"Process {key} exited unexpectedly with code {exitCode}", key)
 
     def detect_services(self):
@@ -445,7 +451,21 @@ class LauncherApp(QMainWindow):
             self.processes["backend"] = proc_be
             self.cards["backend"].set_status("ok")
         
-        # 3. Monitor
+        # 3. Machine Control
+        self.cards["machine"].set_status("running")
+        proc_machine = self._create_process("machine")
+        proc_machine.setWorkingDirectory(os.path.join(BASE_DIR, "machine_control"))
+        proc_machine.start(PYTHON_EXE, ["pc_controller.py", "--mode", "semi-auto", "--api-mode", "real", "--api-endpoint", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx"])
+        self.processes["machine"] = proc_machine
+        self.cards["machine"].set_status("ok")
+        
+        # 3.5 Shopfloor Simulator (No Dashboard Card)
+        proc_shopfloor = self._create_process("shopfloor")
+        proc_shopfloor.setWorkingDirectory(os.path.join(BASE_DIR, "simulation"))
+        proc_shopfloor.start(PYTHON_EXE, ["shopfloor_sim.py"])
+        self.processes["shopfloor"] = proc_shopfloor
+        
+        # 4. Monitor
         self.cards["monitor"].set_status("running")
         proc_mon = self._create_process("monitor")
         proc_mon.setWorkingDirectory(DB_DIR)
@@ -502,11 +522,13 @@ class LauncherApp(QMainWindow):
         # Terminate QProcesses
         for key, proc in self.processes.items():
             if key != "docker" and proc.state() != QProcess.NotRunning:
-                self.cards[key].set_status("running", "Stopping...")
+                if key in self.cards:
+                    self.cards[key].set_status("running", "Stopping...")
                 proc.terminate()
                 if not proc.waitForFinished(5000):  # Wait up to 5s gracefully
                     proc.kill()
-                self.cards[key].set_status("idle", "Stopped")
+                if key in self.cards:
+                    self.cards[key].set_status("idle", "Stopped")
         
         # Stop Docker without freezing UI completely
         self.cards["docker"].set_status("running", "Stopping...")

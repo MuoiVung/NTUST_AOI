@@ -4,6 +4,7 @@ import { RunGallery } from './components/RunGallery';
 import { EditRun } from './components/EditRun';
 import { NewInspection } from './components/NewInspection';
 import { Settings } from './components/Settings';
+import { OperatorDashboard } from './components/OperatorDashboard';
 import { IMAGES } from './services/mockData';
 
 enum View {
@@ -11,6 +12,7 @@ enum View {
     RUN_DETAIL = 'RUN_DETAIL',
     RUN_EDIT = 'RUN_EDIT',
     NEW_INSPECTION = 'NEW_INSPECTION',
+    OPERATOR = 'OPERATOR',
     SETTINGS = 'SETTINGS'
 }
 
@@ -62,7 +64,8 @@ const Sidebar = ({
                     </button>
                 </div>
                 <nav className="flex flex-col gap-2">
-                    <NavItem view={View.RUN_LIST} icon="dashboard" label="Dashboard" />
+                    <NavItem view={View.OPERATOR} icon="qr_code_scanner" label="Operator Station" />
+                    <NavItem view={View.RUN_LIST} icon="dashboard" label="Gallery Dashboard" />
                     <NavItem view={View.SETTINGS} icon="settings" label="Settings" />
                 </nav>
             </div>
@@ -80,7 +83,7 @@ const Sidebar = ({
 };
 
 export default function App() {
-    const [currentView, setCurrentView] = useState<View>(View.RUN_LIST);
+    const [currentView, setCurrentView] = useState<View>(View.OPERATOR);
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -109,6 +112,8 @@ export default function App() {
                     : <RunList onViewDetail={handleViewDetail} onCreate={() => setCurrentView(View.NEW_INSPECTION)} />;
             case View.NEW_INSPECTION:
                 return <NewInspection onSave={() => setCurrentView(View.RUN_LIST)} onCancel={() => setCurrentView(View.RUN_LIST)} />;
+            case View.OPERATOR:
+                return <OperatorDashboard />;
             case View.SETTINGS:
                 return <Settings />;
             default:

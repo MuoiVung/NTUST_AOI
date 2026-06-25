@@ -33,12 +33,7 @@ DB_NAME = "pcb_aoi_db"
 WATCH_DIR = os.getenv("IMAGE_WATCH_DIR", "./images/raw_incoming")
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.jfif'}
 
-# Mock Metadata (Matching New Schema)
-MOCK_RUN_NUMBER = "RUN_AUTO_001"
-MOCK_SERIAL = "SN-AUTO-MONITOR"
-MOCK_BOARD_NUMBER = "AUTO_BOARD_DEF"
-MOCK_ORDER_NUMBER = "AUTO_ORDER_001"
-MOCK_MACHINE_ID = "HMI_MONITOR_01"
+import re
 
 def get_db_connection():
     try:
@@ -50,32 +45,28 @@ def get_db_connection():
         logger.error(f"Error connecting to database: {e}")
         return None
 
-def ensure_dependencies_exist(conn):
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO orders (order_number, target_quantity, status)
-                VALUES (%s, 100, 'ACTIVE') ON CONFLICT (order_number) DO NOTHING;
-            """, (MOCK_ORDER_NUMBER,))
-            cur.execute("""
-                INSERT INTO board_numbers (board_number, grid_rows, grid_cols)
-                VALUES (%s, 1, 1) ON CONFLICT (board_number) DO NOTHING;
-            """, (MOCK_BOARD_NUMBER,))
-            cur.execute("""
-                INSERT INTO runs (run_number, serial_number, board_number, order_number, machine_id, status)
-                VALUES (%s, %s, %s, %s, %s, 'COMPLETED') ON CONFLICT (run_number) DO NOTHING;
-            """, (MOCK_RUN_NUMBER, MOCK_SERIAL, MOCK_BOARD_NUMBER, MOCK_ORDER_NUMBER, MOCK_MACHINE_ID))
-            conn.commit()
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Error ensuring dependencies: {e}")
-
 def insert_image_record(file_path, file_name, file_size):
+    # Regex to parse: [run_code]_R[row]_C[col]_[index].jpg
+    # Example: SN12345_TOP_1234567890_R2_C1_3.jpg
+    # Actually pc_controller produces: f"{run_code}_R{step_index}_C0_{self.image_index}.jpg"
+    # Or just extract R and C
+    match = re.search(r'^(.*)_R(\d+)_C(\d+)_(\d+)\.(jpg|jpeg|png|bmp|jfif)$', file_name, re.IGNORECASE)
+    
+    if match:
+        run_number = match.group(1)
+        row_idx = int(match.group(2))
+        col_idx = int(match.group(3))
+    else:
+        # Fallback if filename doesn't match
+        run_number = "UNKNOWN_RUN"
+        row_idx = 0
+        col_idx = 0
+
     conn = get_db_connection()
     if not conn: return
 
     try:
-        ensure_dependencies_exist(conn)
+        # Ensure dependencies (Wait: pc_controller already ensures the run exists, so we don't need to create mock runs anymore!)
         with conn.cursor() as cur:
             logical_path = os.path.abspath(file_path)
             
@@ -87,11 +78,11 @@ def insert_image_record(file_path, file_name, file_size):
 
             insert_img_sql = """
             INSERT INTO images (run_number, side, local_path, row_idx, col_idx, condition, file_size_bytes)
-            VALUES (%s, 'Top', %s, 0, 0, 'PASS', %s)
+            VALUES (%s, 'Top', %s, %s, %s, 'UNKNOWN', %s)
             """
-            cur.execute(insert_img_sql, (MOCK_RUN_NUMBER, logical_path, file_size))
+            cur.execute(insert_img_sql, (run_number, logical_path, row_idx, col_idx, file_size))
             conn.commit()
-            logger.info(f"SUCCESS: Inserted record for '{file_name}'")
+            logger.info(f"SUCCESS: Inserted record for '{file_name}' (Run: {run_number}, R{row_idx} C{col_idx})")
     except Exception as e:
         conn.rollback()
         logger.error(f"FAIL: Failed to insert record for '{file_name}': {e}")

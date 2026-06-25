@@ -1,11 +1,19 @@
+import asyncio
+import select
+
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from pydantic import BaseModel
+from typing import List, Optional
 import psycopg2
+
+class RunStartRequest(BaseModel):
+    serial_number: str
+
 from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from dotenv import load_dotenv
@@ -77,6 +85,7 @@ async def lifespan(app: FastAPI):
         get_pool()
     except Exception as e:
         print(f"CRITICAL: Could not initialize database pool: {e}")
+    asyncio.create_task(listen_pg_notifications())
     yield
     # Close pool on shutdown
     if _pool:
@@ -84,6 +93,61 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AOI API", lifespan=lifespan)
 app.router.redirect_slashes = False
+
+# ─── WebSocket Connection Manager ─────────────────────────────────────────────
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(message)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
+# ─── PG Notify Listener ───────────────────────────────────────────────────────
+async def listen_pg_notifications():
+    conn = None
+    try:
+        # We need a dedicated connection for listening
+        conn = psycopg2.connect(DB_DSN)
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        with conn.cursor() as cur:
+            cur.execute("LISTEN ui_update;")
+        
+        print("[WS] Started listening to PG NOTIFY ui_update")
+        while True:
+            if select.select([conn], [], [], 1.0) == ([conn], [], []):
+                conn.poll()
+                while conn.notifies:
+                    notify = conn.notifies.pop(0)
+                    await manager.broadcast(notify.payload)
+            await asyncio.sleep(0.1)
+    except Exception as e:
+        print(f"[WS] Error in pg notification listener: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+@app.websocket("/ws/ui-updates")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 app.add_middleware(
     CORSMiddleware,
@@ -235,6 +299,36 @@ def delete_image(image_id: str):
     finally:
         release_db_connection(conn)
 
+@app.post("/runs/start")
+def start_machine_run(req: RunStartRequest):
+    """
+    Called by Operator Dashboard to trigger a run.
+    Saves the pending serial number into DB so PC Controller can pick it up.
+    """
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    try:
+        with conn.cursor() as cur:
+            # Upsert into system_configs
+            cur.execute("""
+                INSERT INTO system_configs (config_name, config_value) 
+                VALUES ('pending_run_sn', %s)
+                ON CONFLICT (config_name) DO UPDATE SET config_value = EXCLUDED.config_value
+            """, (req.serial_number,))
+            
+            # Send asynchronous notification to PC Controller
+            # Using psycopg2's NOTIFY functionality
+            cur.execute(f"NOTIFY new_run_sn, '{req.serial_number}';")
+            
+            conn.commit()
+            return {"status": "success", "message": f"Run queued for {req.serial_number}"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 @app.delete("/runs/{run_number}")
 def delete_run(run_number: str):
     conn = get_db_connection()
@@ -337,6 +431,45 @@ def proxy_image(image_id: str):
             raise HTTPException(status_code=404, detail=f"Error fetching from Cloud: {str(e)}")
 
     raise HTTPException(status_code=404, detail="Image file not found locally or on Cloud")
+
+@app.get("/system/status")
+def get_system_status():
+    import socket
+    import urllib.request
+    
+    # Check PLC simulator from DB
+    plc_status = "ERROR"
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT config_value FROM system_configs WHERE config_name = 'plc_status'")
+            row = cur.fetchone()
+            if row and row["config_value"]:
+                plc_status = row["config_value"]
+    except Exception:
+        pass
+    finally:
+        if conn:
+            release_db_connection(conn)
+        
+    # Check Shopfloor API
+    api_status = "ERROR"
+    try:
+        req = urllib.request.Request("http://127.0.0.1:9090/ping")
+        with urllib.request.urlopen(req, timeout=0.5) as response:
+            if response.status == 200:
+                api_status = "OK"
+    except Exception:
+        pass
+        
+    # Camera is hardcoded OK for now
+    camera_status = "OK"
+    
+    return {
+        "plc": plc_status,
+        "shopfloor": api_status,
+        "camera": camera_status
+    }
 
 
 @app.get("/configs/")
