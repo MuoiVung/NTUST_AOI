@@ -4,6 +4,12 @@ tags: [Documentation]
 
 ---
 
+---
+title: '第六章:檔案儲存database, Peter, Vincent'
+tags: [Documentation]
+
+---
+
 # Technical SOP & Manual: AOI Database Management System
 
 ## Document Control
@@ -71,6 +77,10 @@ This section guides factory floor operators on starting, running, and shutting d
 
 3.  **Shut Down Windows:** After the launcher closes (about 1.5 seconds), safely shut down the Windows OS.
 4.  **⚠️ CRITICAL WARNING:** Never switch off the IPC main power supply directly while services are active. Bypassing the PostgreSQL shutdown routine can corrupt database files!
+
+
+
+
 
 ---
 
@@ -314,6 +324,27 @@ The workspace includes a dedicated performance benchmarker at `ntust_aoi_pcb_db/
         SELECT count(*), state FROM pg_stat_activity GROUP BY state;
         ```
 
+#### ⚠️ Scenario 4.5.4: System Recovery and Safe Restart Midway (Mid-Scan Interruptions)
+*   **Issue Description:**
+    An unexpected interruption occurs mid-scan (e.g., a physical emergency stop, a camera USB connection timeout, a PLC limit switch trigger, or an accidental HMI application closure) while the system has only captured a subset of the expected PCB image grid. The operator needs to safely reset the state machine, clean up database state inconsistencies, and re-initiate the run from a safe home position.
+*   **Recovery Action Checklist:**
+    *   `[ ]` **Emergency Hold & Safe Stop:** Press the physical E-Stop or click **Stop Run** on the HMI. Ensure all XYZ stage movement is completely arrested and lighting modules turn off.
+    *   `[ ]` **Terminate Locked Software Handlers:** Force-close the active `AOI_Launcher` or python process window to release the serial COM port locks and camera SDK drivers.
+    *   `[ ]` **Manage Database State Inconsistencies:**
+        *   An interrupted run leaves the active `runs` record in a stale status. Access pgAdmin and run a diagnostic query:
+            ```sql
+            SELECT run_code, status, created_at FROM runs WHERE status = 'RUNNING' OR status = 'INCOMPLETE';
+            ```
+        *   *Option A (Clean Purge - Recommended for Retries):* If the board is to be scanned from scratch, run a SQL deletion to clear partial data (cascading constraints will delete associated image entries automatically):
+            ```sql
+            DELETE FROM runs WHERE run_code = 'YOUR_INTERRUPTED_RUN_CODE';
+            ```
+            Manually empty the local temporary directory `captures/{board_name}/{side}/` to prevent orphan image file fragments.
+        *   *Option B (Retain for Auditing):* Mark the run status as `'INTERRUPTED'` and append a version suffix on the retry run (e.g., scan barcode as `Board_A_v2`).
+    *   `[ ]` **Re-initialize PC Services:** Relaunch the `AOI_Launcher`, click **Start All Services**, and verify that the database status bar returns to **Green (✔ Connected)**.
+    *   `[ ]` **Execute PLC Homing Sequence:** With services active, set the operating mode to **Manual Mode** and trigger the **Home Axes** command to return the XY table to coordinates `(0,0)`.
+    *   `[ ]` **Resume Production Scan:** Verify the conveyor belt is clear, reload the PCB, scan the ID (using a retry suffix if retaining the failed run), and initiate a new **Semi-Auto** run.
+
 ---
 
 ## 5. Maintenance & Administrator Manual (In Progress / Roadmap Drafts)
@@ -377,3 +408,381 @@ To support large-scale enterprise tracing and multiple production lines, the dat
 3.  **`runs` table:** Tracks metadata logs of inspection runs, linked to active orders and board numbers.
 4.  **`images` table:** Catelogs camera captures with strict relational cascading.
 5.  **`system_configs` table:** Holds global variables (such as local retention periods and cloud syncing variables).
+
+
+
+# Serial API/ TO REFINE
+
+
+Below is an English translation and integration analysis of the uploaded **“SerialTest API Integration Guide v2”**. The PDF describes an AAEON production-tracking API that lets an automated machine query board/order information by serial number and receive PCB dimensions and traceability data as JSON. 
+
+# English translation
+
+## Cover
+
+**Smart Manufacturing Data Traceability System**
+**SerialTest API Integration Guide**
+**Complete Reference Manual for Smart Manufacturing Data Inquiry**
+**A Comprehensive Reference for Smart Manufacturing Data Inquiry**
+AAEON Tracking Systems · v1.0
+
+---
+
+## 01 API Overview
+
+Through automated serial-number inquiry and Oracle ERP synchronization, the system simplifies production-data retrieval so that traceability data can be supplied in real time to automated equipment and dashboard systems.
+
+---
+
+## API Endpoint
+
+Access the production traceability system through a lightweight HTTP GET request.
+
+| Item             | Translation                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| Protocol         | HTTPS, encrypted secure transmission                                                   |
+| Method           | GET                                                                                    |
+| Base URL         | `https://tracking.aaeon.com.tw/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx` |
+| Endpoint purpose | Production tracking endpoint                                                           |
+
+The diagram on page 3 shows the basic flow:
+
+```text
+1. Serial number scan
+2. API query
+3. JSON response
+```
+
+The system is described as real-time, secure, and suitable for integration with automated equipment. 
+
+---
+
+## Request parameter
+
+| Parameter | Type   | Required | Description                                                        |
+| --------- | ------ | -------- | ------------------------------------------------------------------ |
+| `sn`      | String | Required | Unique serial number of the packaged item, for example `C26602074` |
+
+Example request:
+
+```text
+.../HandlerGetSerialInfo.ashx?sn=C26602074
+```
+
+---
+
+## 02 Response Format
+
+The API uses a standardized JSON structure. It is intended for seamless integration with automated hardware equipment and traceability dashboards, making it easier for front-end systems to parse and back-end systems to connect.
+
+---
+
+## JSON structure
+
+The response contains three main groups of information.
+
+### Identification
+
+Retrieves:
+
+```text
+SN serial number
+M_NO production work order
+P_NO packaging work order
+```
+
+### Dimensions
+
+Dynamically retrieves PCB board length and width from Oracle BOM.
+
+Unit:
+
+```text
+mm
+```
+
+### Status flags
+
+Uses:
+
+```text
+HasData
+Msg
+```
+
+for control and error reporting.
+
+---
+
+## Field definitions
+
+| Key             | Description                                                      | Source       |
+| --------------- | ---------------------------------------------------------------- | ------------ |
+| `M_NO` / `P_NO` | Production work order number and packaging work order number     | MES database |
+| `SemiModel`     | Semi-finished product part number, used for BOM query comparison | Oracle ERP   |
+| `PCB_Length`    | Standard PCB length, in mm                                       | Oracle BOM   |
+| `PCB_Width`     | Standard PCB width, in mm                                        | Oracle BOM   |
+
+---
+
+## Scenario handling
+
+The front end should determine the result using the `HasData` flag and then apply the corresponding processing logic.
+
+### Successful query
+
+```json
+{
+  "SN": "C26602074",
+  "PCB_Length": "84",
+  "PCB_Width": "55",
+  "HasData": "1",
+  "Msg": ""
+}
+```
+
+### Failed query
+
+```json
+{
+  "SN": "",
+  "PCB_Length": "",
+  "PCB_Width": "",
+  "HasData": "0",
+  "Msg": "查無此序號資料"
+}
+```
+
+Translation of message:
+
+```text
+No data found for this serial number.
+```
+
+Important note from the document:
+
+```text
+The front end should first check the HasData flag before deciding whether to read the dimension fields, to avoid empty values causing unintended automation equipment motion.
+```
+
+This is the most important implementation warning in the document. 
+
+---
+
+# Analysis for our AOI / vision-control system
+
+## 1. What this API does for DUO_AOI
+
+This API should be treated as the **external order/board-information lookup interface**.
+
+In our system, it fits here:
+
+```text
+Barcode scanner
+    -> PC Vision Controller or HMI
+        -> SerialTest API
+            -> returns board/order/dimension data
+                -> PC validates data
+                    -> database creates run record
+                    -> PLC receives only validated recipe/size/step data
+```
+
+It should not directly control the PLC or motion hardware.
+
+The safe rule should be:
+
+```text
+API data informs the recipe.
+PLC still validates motion and safety.
+PC still validates metadata and dimensions.
+```
+
+---
+
+## 2. How it connects to the SOP
+
+This API supports the SOP sections for:
+
+```text
+board/sample metadata entry
+recipe or board-size lookup
+semi-auto run preparation
+database run creation
+traceability
+operator fallback if barcode lookup fails
+```
+
+It also helps automate the process described in your first chapter:
+
+```text
+scan board/order number
+retrieve board dimensions
+calculate grid count
+prepare scan path
+start semi-auto scan
+```
+
+---
+
+## 3. Recommended interface logic
+
+The PC or HMI should call the API after barcode scan.
+
+```mermaid
+flowchart TD
+    A["Scan barcode / serial number"] --> B["Call SerialTest API"]
+    B --> C{"HasData == 1?"}
+
+    C -->|"yes"| D["Read SN, M_NO, P_NO, SemiModel, PCB_Length, PCB_Width"]
+    D --> E["Validate dimensions and board metadata"]
+    E --> F{"Valid for machine limits?"}
+    F -->|"yes"| G["Create run record and load recipe / scan plan"]
+    F -->|"no"| H["Reject start and show dimension error"]
+
+    C -->|"no"| I["Show Msg to operator"]
+    I --> J["Manual input or rescan barcode"]
+
+    H --> J
+```
+
+---
+
+## 4. Required validation before using API data
+
+The API returns several numeric values as strings. The PC software should not directly use them without validation.
+
+For `PCB_Length` and `PCB_Width`, validate:
+
+```text
+not empty
+can be parsed as number
+unit is mm
+greater than 0
+within machine-supported board size
+within conveyor width range
+within XY table scan range
+consistent with selected board side or recipe
+```
+
+Given our current equipment summary, the machine is described as supporting boards up to about `300 mm x 300 mm`, while the conveyor width is adjustable from `100 mm` to `600 mm`. So the API result must be checked against both **inspection FOV/XY scan limits** and **mechanical handling limits** before starting a run.
+
+---
+
+## 5. Failure handling
+
+If `HasData = "0"`:
+
+```text
+Do not read PCB_Length or PCB_Width.
+Do not calculate a scan grid.
+Do not send recipe or motion data to the PLC.
+Do not allow Semi-Auto Start unless manual override is explicitly approved.
+Show the Msg field to the operator.
+Log the lookup failure.
+```
+
+Suggested operator message:
+
+```text
+Serial number lookup failed.
+Message: 查無此序號資料 / No data found for this serial number.
+Please rescan the barcode or use approved manual input.
+```
+
+Suggested internal error mapping:
+
+| Situation                        | Suggested error category                          |
+| -------------------------------- | ------------------------------------------------- |
+| API unreachable                  | Communication / network error                     |
+| `HasData = 0`                    | Operator / workflow or external-data lookup error |
+| Empty PCB dimensions             | Invalid metadata / invalid payload                |
+| Dimensions outside machine range | Recipe or motion range validation error           |
+| API returns malformed JSON       | PC/software or communication error                |
+
+---
+
+## 6. Database fields to store
+
+When the API succeeds, store the lookup result in the run record.
+
+Recommended fields:
+
+```text
+serial_number
+M_NO
+P_NO
+SemiModel
+PCB_Length
+PCB_Width
+api_has_data
+api_msg
+api_query_time
+api_raw_response_json
+```
+
+These can be added to `runs`, or stored in a separate `external_lookup_log` table.
+
+Recommended practical approach:
+
+```text
+runs:
+    store the main accepted values
+
+event_log or external_lookup_log:
+    store query status and raw response
+```
+
+This helps later answer:
+
+```text
+Which barcode was scanned?
+What board dimensions did the API return?
+Did the operator manually override anything?
+Did the PLC scan using API data or manually entered data?
+```
+
+---
+
+## 7. SOP addition recommended
+
+Add this as a new subsection in the SOP under startup / semi-auto preparation.
+
+### Barcode / Serial Number Lookup Procedure
+
+```text
+1. Operator scans the PCB barcode or serial number.
+2. PC sends HTTPS GET request to the SerialTest API using the `sn` parameter.
+3. PC checks the `HasData` flag.
+4. If `HasData = "1"`, PC reads the returned board/order data.
+5. PC validates PCB length and width against machine limits.
+6. PC creates or updates the run record.
+7. PC loads or calculates the scan grid.
+8. Operator confirms the displayed board information.
+9. Semi-Auto Start becomes available only after validation passes.
+10. If `HasData = "0"`, PC blocks automatic start and requests rescan or approved manual input.
+```
+
+---
+
+## 8. Important implementation gaps in the API document
+
+The guide is useful, but it does not specify several details we should clarify before production integration:
+
+| Missing item            | Why it matters                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| Authentication method   | The URL may require IP whitelist, token, VPN, or internal network access        |
+| Timeout recommendation  | The PC needs a safe timeout before blocking run start                           |
+| Rate limit              | Repeated barcode scans could overload or be blocked                             |
+| Full JSON example       | The example omits `M_NO`, `P_NO`, and `SemiModel` even though they are listed   |
+| Error status codes      | Need to know HTTP-level errors, not only `HasData`                              |
+| Encoding                | Chinese `Msg` field should be handled as UTF-8                                  |
+| Field type guarantees   | Dimensions are shown as strings, so parsing rules are needed                    |
+| Units                   | It says dimensions are in mm, but we should confirm decimal vs integer behavior |
+| Availability/SLA        | Needed if production depends on this lookup                                     |
+| Offline fallback policy | Needed if AAEON tracking system is unavailable                                  |
+
+---
+
+# Main conclusion
+
+This API is valuable for our DUO_AOI workflow because it can automatically retrieve board identity and PCB dimensions from a scanned serial number. The most important safety rule is that the PC must check `HasData` first and validate all returned dimensions before allowing recipe generation or PLC motion. The API should feed **metadata and recipe preparation**, not direct machine control.

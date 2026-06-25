@@ -4,19 +4,6 @@ tags: [Documentation]
 
 ---
 
-
-6/1 Suggestion
-1. Good: version control table  V
-2. Illustration of conveyor ( L x W x H)   V
-3. Operation information: I/O parameter, error log...to understand the status of conveyor
-4. calibration process
-5. Tool and service 
-6. Workflow, schematic, and wiring diagram (may provide by supplier or create by our own. ) 
-
-
-
-
-
 # 第二章:輸送帶使用手冊
 
 ## 文件管理
@@ -67,7 +54,7 @@ tags: [Documentation]
 | 錯誤代碼 | 原因    |
 | ----- | -------- |
 | C01 | 進板接近開關狀態異常|
-| C02 | 出板接近開狀態異常|
+| C02 | 出板接近開關狀態異常|
 | C03 | 光閘感測器狀態異常|
 | C04 | 馬達驅動器狀態異常|
 | C05 | |
@@ -83,6 +70,5 @@ tags: [Documentation]
 | 接近開關2    |    |
 | 光閘感測器   |     |
 
-
-保養資料
-FAQ
+## 7. 維修工具
+## 保養資料
