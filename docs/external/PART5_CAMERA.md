@@ -13,8 +13,8 @@ tags: [Documentation]
 | Document title | End-User SOP: Vision-Based Component Capture System |
 | System | PC Vision System + Mitsubishi FX5U PLC |
 | Intended users | Operators, technicians, process engineers |
-| Version | Draft v1.1 |
-| Date | 2026-05-25 |
+| Version | Draft v1.3 |
+| Date | 2026-06-23 |
 | Prepared by | Marnel Altius |
 | Approved by | To be assigned |
 
@@ -26,13 +26,72 @@ tags: [Documentation]
 | Version | Date | Description | Author |
 |---|---|---|---|
 | Draft v1.1 | 2026-05-25 | Initial end-user SOP draft | Marnel Altius |
+| Draft v1.2 | 2026-06-15 | Initial end-user SOP draft | Marnel Altius |
+| Draft v1.3 | 2026-06-23 | Expanded original SOP structure with quick access, status definitions, controls, functions, compiled diagrams, tests, fault handling, and manual/auto calibration routines | Marnel Altius / ChatGPT draft support |
 
 
 ---
+## Quick Access
 
+This quick-access section summarizes the most important operator and technician information. Detailed procedures remain in the original sections below.
 
+### A. Important Information
 
+| Topic | Key Point |
+|---|---|
+| Motion and safety authority | The PLC controls machine motion, interlocks, alarms, and safe-stop behavior. |
+| Vision and data authority | The PC controls camera acquisition, image saving, database writing, and AOI result handling. |
+| Database role | The database records runs, images, events, errors, and calibration history. It does not directly control the machine. |
+| Manual Mode | Used for setup, teaching, test capture, calibration support, troubleshooting, and recovery. |
+| Semi-Auto Mode | Used for normal scanning after setup, camera, lighting, and storage are confirmed ready. |
+| Calibration Mode | Used to calibrate or verify camera geometry and machine-to-camera alignment using a known ChArUco pattern. |
+| Fault reset | Reset is allowed only after the cause is understood, corrected, and the machine area is safe. |
 
+### B. Fast Error Response
+
+| Symptom | Immediate Action |
+|---|---|
+| Unexpected motion | Press emergency stop if there is risk to people, hardware, or sample. |
+| Camera not detected | Stop scan, check camera cable/software, restart camera service if needed. |
+| Capture rejected | Check camera readiness, frame freshness, metadata, storage path, and PLC step match. |
+| Storage error | Stop or pause operation, check disk space, folder path, permissions, and database status. |
+| Motion error | Stop operation and inspect obstruction, homing, limits, servo/drive status, and target position. |
+| Safety error | Do not reset immediately. Resolve the interlock, guard, E-stop, or area-clear condition first. |
+| Communication timeout | Stop or hold operation, check Ethernet/PLC/PC software, then reset only after communication is stable. |
+
+### C. Tests to Run Before Production
+
+| Test Group | Minimum Required Check |
+|---|---|
+| Startup | PLC ready, PC ready, camera detected, database/storage available. |
+| Communication | PC_READY/PLC_READY handshake and one-event-at-a-time ACK behavior confirmed. |
+| Vision | Live acquisition active; fresh frame available; manual image save verified. |
+| Motion | Manual home and manual move complete without error. |
+| Semi-Auto | One complete move/capture/step-complete cycle succeeds. |
+| Fault handling | Camera disconnect, storage failure, E-stop, and communication timeout response verified. |
+| Calibration | ChArUco detection and calibration result save verified. |
+
+### D. Compiled Graph Package
+
+The compiled diagrams for the vision, communication, control, fault, database, and calibration flows are stored with this document package.
+
+| Diagram | File |
+|---|---|
+| Overall functional connection | `compiled_diagrams/01_overall_functional_connection.png` |
+| Vision capture dataflow | `compiled_diagrams/02_vision_capture_dataflow.png` |
+| PC/PLC event communication | `compiled_diagrams/03_pc_plc_event_communication_sequence.png` |
+| High-level control flow | `compiled_diagrams/04_high_level_control_flow.png` |
+| Manual mode control flow | `compiled_diagrams/05_manual_mode_control_flow.png` |
+| Semi-auto mode control flow | `compiled_diagrams/06_semi_auto_mode_control_flow.png` |
+| Database/storage flow | `compiled_diagrams/07_database_storage_flow.png` |
+| Fault handling | `compiled_diagrams/08_fault_handling_flowchart.png` |
+| System state diagram | `compiled_diagrams/09_system_state_diagram.png` |
+| Auto calibration flow | `compiled_diagrams/10_auto_calibration_flowchart.png` |
+| Manual calibration flow | `compiled_diagrams/11_manual_calibration_flowchart.png` |
+| Operating sequence to error reverse chart | `compiled_diagrams/12_operating_sequence_error_reverse_chart.png` |
+| Test matrix | `compiled_diagrams/13_test_matrix_chart.png` |
+
+---
 ## 1. Purpose
 
 This SOP explains how an end user should operate the vision-based component capture system.
@@ -127,6 +186,36 @@ PLC waits for capture completion before continuing.
 
 ---
 
+
+### 4.1 Functional Connection Diagram
+
+The following diagram groups the system into functional blocks: Operator/HMI, PC vision/data, PLC control, machine hardware, vision hardware, database/storage, and external systems.
+
+![01_overall_functional_connection](https://hackmd.io/_uploads/H1FFXswGzg.png)
+
+
+### 4.2 Control Responsibility Summary
+
+| Function | Responsible System |
+|---|---|
+| Machine safety | PLC |
+| Conveyor and XY motion | PLC |
+| Lighting control | PLC |
+| Operator command entry | HMI / PC UI |
+| Camera acquisition | PC vision software |
+| Capture authorization decision | PC vision software |
+| Image saving | PC vision software |
+| Run, image, event, and error records | PC database interface |
+| Image preview and long-term storage | Nginx / MinIO / server storage |
+
+### 4.3 PC/PLC Event Communication Overview
+
+The PC and PLC shall exchange high-level events using a mailbox structure. The communication protocol may be SLMP/MC, Modbus, serial, or simulator transport, but the logic shall remain event-based.
+
+![03_pc_plc_event_communication_sequence](https://hackmd.io/_uploads/HkUxNswGGl.png)
+
+---
+
 ## 5. Operating Modes
 
 
@@ -134,6 +223,17 @@ PLC waits for capture completion before continuing.
 
 ![image](https://hackmd.io/_uploads/r1pwR8-xzl.png)
 
+
+
+### 5.0 System State Diagram
+
+The full system should move through defined states. Mode changes should only occur from safe, idle conditions.
+
+![09_system_state_diagram](https://hackmd.io/_uploads/rkwQEoPzzg.png)
+
+### 5.0.1 High-Level Control Flow
+
+![04_high_level_control_flow](https://hackmd.io/_uploads/rJSN4ovfGl.png)
 
 ## 5.1 Manual Mode
 
@@ -264,6 +364,15 @@ Use this procedure when operating the system step by step.
 
 ---
 
+
+### 8.5 Manual Mode Control Flow Graph
+
+The following graph shows how manual operator commands pass from the HMI/PC to the PLC, and how optional image capture is handled after safe motion completion.
+
+![05_manual_mode_control_flow](https://hackmd.io/_uploads/SyVKEoDGzx.png)
+
+---
+
 ## 9. Semi-Auto Mode Procedure
 
 Use this procedure for normal scanning.
@@ -317,6 +426,22 @@ For each scan point:
 3. Review the run log for errors or skipped captures.
 4. Remove the board/sample only after confirming that the machine is idle.
 5. Prepare the next board/sample or proceed to shutdown.
+
+---
+
+
+### 9.5 Semi-Auto Mode Control Flow Graph
+
+The following graph shows the normal semi-auto sequence: recipe/metadata validation, run creation, PLC step execution, capture authorization, image save, AOI result handling, and run completion.
+
+![06_semi_auto_mode_control_flow](https://hackmd.io/_uploads/SkAcNowzze.png)
+
+### 9.6 Vision Capture Dataflow Graph
+
+The following graph focuses specifically on image capture dataflow between PLC position events, camera acquisition, PC capture checks, image saving, database writing, and AOI result update.
+
+
+![02_vision_capture_dataflow](https://hackmd.io/_uploads/SJnj4jvGzg.png)
 
 ---
 
@@ -392,6 +517,15 @@ Procedure:
 
 ---
 
+
+## 10.5 Fault-Handling Flowchart
+
+All faults shall follow the same general response sequence: detect, stop or hold safely, reject new unsafe commands, log the fault, correct the cause, validate reset, and return to idle only when safe.
+
+![08_fault_handling_flowchart](https://hackmd.io/_uploads/HJR2VsDzzx.png)
+
+---
+
 ## 11. Normal Shutdown Procedure
 
 1. Confirm that no scan is running.
@@ -421,6 +555,40 @@ captures/
                 img_0002.png
 ```
 
+
+### 12.1 Database and Storage Flow
+
+The PC saves image files to the local image folder and records image metadata in the database. Image files may be served to the dashboard through Nginx and mirrored to MinIO/server storage for long-term backup.
+
+
+![07_database_storage_flow](https://hackmd.io/_uploads/SyIgSivzGl.png)
+
+### 12.2 Recommended File Naming
+
+Recommended image naming should include run code, row, column, and camera side.
+
+```text
+captures/
+    {board_code}/
+        {board_side}/
+            {run_code}/
+                row_{row_idx}/
+                    top_r{row_idx}_c{col_idx}.png
+                    bottom_r{row_idx}_c{col_idx}.png
+```
+
+### 12.3 File Verification Requirements
+
+For each saved image, the PC should verify:
+
+- File exists
+- File size is greater than zero
+- File path is valid and writable
+- Image index is not duplicated
+- Optional checksum can be generated
+- Database `images` row matches the saved file path
+
+
 After each run, verify:
 
 - The correct board/sample folder was created
@@ -446,6 +614,37 @@ After each run, verify:
 | Storage error | Image cannot be saved | Check disk space, folder path, and permissions |
 | Communication timeout | PC and PLC lost communication | Stop operation and check network/software |
 | Unexpected motion | Machine behavior is abnormal | Use emergency stop if needed |
+
+---
+
+
+### 13.1 Operating Sequence to Error-Code Reverse Chart
+
+This chart connects normal operating steps to likely error categories and response actions.
+
+![12_operating_sequence_error_reverse_chart](https://hackmd.io/_uploads/H1KGHoPMzg.png)
+
+| Operating Step | Possible Fault | Error Range | Example Code | Required Response |
+|---|---|---:|---:|---|
+| Software startup | PC configuration missing | 1000 | 1004 | Load correct configuration |
+| PLC connection | PLC not reachable | 3000 | 3001 | Check Ethernet, IP, port, PLC state |
+| Camera startup | Camera not detected | 4000 | 4001 | Check USB cable, camera power, SDK |
+| Database startup | Database unavailable | 5000 | 5010 | Check PostgreSQL, Docker, fallback logging |
+| Mode selection | Mode switch while busy | 1000 / 2000 | 1010 / 2002 | Wait until machine is idle |
+| Manual move | Axis not homed | 6000 | 6001 | Run homing sequence |
+| Manual move | Target out of range | 6000 | 6003 | Correct target position |
+| Semi-auto start | Metadata missing | 8000 | 8001 / 8002 | Enter board code and side |
+| Semi-auto start | Recipe missing | 2000 | 2012 | Load correct recipe |
+| Move to scan point | Motion timeout | 6000 | 6006 | Inspect obstruction, drive, target |
+| Position reached | PC/PLC step mismatch | 1000 / 6000 | 1008 / 6013 | Stop and inspect event log |
+| Capture authorization | Camera stale frame | 4000 | 4011 | Restart or verify acquisition |
+| Capture authorization | Storage path invalid | 5000 | 5002 | Correct save folder |
+| Capture window | PC does not respond | 3000 | 3010 | Check PC software and communication |
+| Image save | File save failed | 5000 | 5006 | Check disk, folder, permissions |
+| Image verification | File invalid or checksum failed | 5000 | 5007 | Re-capture image |
+| Any operation | E-stop active | 7000 | 7001 | Inspect machine before reset |
+| Any operation | Guard open | 7000 | 7002 | Close guard and reset safely |
+| Any operation | Heartbeat lost | 3000 | 3011 | Safe stop, check network and software |
 
 ---
 
@@ -505,7 +704,373 @@ Do not bypass safety checks.
 Do not reset faults without understanding the cause.
 ```
 
-# Error Code Reference  
+
+---
+
+## 17. Status Definitions
+
+The HMI or PC dashboard should display clear system statuses. Operators should not need to interpret raw PLC states or raw database states during normal use.
+
+### 17.1 Overall System Status
+
+| Status | Meaning | Operator Action |
+|---|---|---|
+| `BOOTING` | PC/PLC/software services are starting | Wait |
+| `IDLE` | System ready, no active motion | Select mode or start operation |
+| `MANUAL_MODE` | Manual operation enabled | Use home, jog, move, or capture |
+| `SEMI_AUTO_READY` | Semi-auto selected and ready | Press Start Run when setup is complete |
+| `RUNNING` | Semi-auto scan is active | Monitor machine |
+| `PAUSED` | Run temporarily paused | Resume or stop |
+| `CALIBRATION_MODE` | Calibration routine active | Follow calibration prompts |
+| `ERROR` | Recoverable fault active | Read alarm and correct cause |
+| `E_STOP_ACTIVE` | Emergency stop active | Inspect before reset |
+| `SHUTDOWN` | Services are closing safely | Wait until shutdown completes |
+
+### 17.2 PLC Status
+
+| Status | Meaning |
+|---|---|
+| `PLC_NOT_READY` | PLC is not ready for operation |
+| `PLC_IDLE` | PLC ready and waiting |
+| `PLC_MANUAL_EXECUTING` | PLC is executing a manual command |
+| `PLC_SEMI_AUTO_RUNNING` | PLC is controlling scan sequence |
+| `PLC_WAIT_CAPTURE_AUTH` | PLC is waiting for PC capture approval |
+| `PLC_WAIT_CAPTURE_DONE` | PLC is waiting for PC capture completion |
+| `PLC_CALIBRATION` | PLC is executing calibration motion |
+| `PLC_ERROR` | PLC-side error active |
+
+### 17.3 PC Vision Status
+
+| Status | Meaning |
+|---|---|
+| `PC_READY` | Vision software is ready |
+| `CAMERA_READY` | Camera is connected and acquiring |
+| `FRAME_FRESH` | Latest image frame is valid |
+| `FRAME_STALE` | Latest image frame is too old |
+| `SAVING_IMAGE` | Image file is being saved |
+| `IMAGE_SAVED` | Image file saved and verified |
+| `DATABASE_CONNECTED` | Database is available |
+| `DATABASE_FALLBACK` | Database unavailable; local fallback logging active |
+| `PC_ERROR` | PC-side error active |
+
+---
+
+## 18. General Controls
+
+### 18.1 Operator Controls
+
+| Control | Function | Allowed When |
+|---|---|---|
+| Start Run | Begin semi-auto scan | Semi-auto ready, no fault |
+| Pause | Temporarily pause operation | Semi-auto running |
+| Resume | Continue paused run | Paused and safe |
+| Stop | Stop current operation | Manual or semi-auto active |
+| Reset Error | Request fault reset | Fault corrected and safe |
+| Home Axes | Return axes to home | Manual or recovery mode |
+| Jog | Move axis manually | Manual mode only |
+| Manual Capture | Capture test image | Manual mode, motion stopped |
+| Auto Calibration | Start ChArUco calibration | Idle and calibration target installed |
+| Manual Calibration | Capture selected calibration poses manually | Calibration mode |
+| QC Override | Change inspection result after review | Image result available |
+
+### 18.2 Engineering / Maintenance Controls
+
+| Control | Function |
+|---|---|
+| Load Recipe | Load board grid, scan path, FOV, and parameters |
+| Edit Recipe | Modify board/grid settings |
+| Load Camera Settings | Load approved camera configuration |
+| Load Pipeline Settings | Load approved image-processing pipeline |
+| Export Logs | Export run, event, and error records |
+| Database Backup | Backup PostgreSQL data |
+| Sync Check | Confirm image sync to server/MinIO |
+| Calibration Report Export | Export calibration result and quality metrics |
+
+---
+
+## 19. Important Functions
+
+### 19.1 PC Vision Functions
+
+| Function | Description |
+|---|---|
+| `check_camera_ready()` | Confirms cameras are connected and acquiring |
+| `check_frame_fresh()` | Confirms latest frame timestamp is valid |
+| `check_storage_ready()` | Confirms save folder exists and is writable |
+| `save_latest_image()` | Saves latest fresh top/bottom camera images |
+| `verify_saved_file()` | Confirms file exists, file size is valid, and checksum can be created |
+| `write_image_record()` | Inserts image metadata into database |
+| `send_capture_done()` | Notifies PLC that image capture is complete |
+| `log_event()` | Records PC/PLC/camera/operator events |
+| `log_error()` | Records fault and recovery information |
+
+### 19.2 PLC Control Functions
+
+| Function | Description |
+|---|---|
+| `validate_mode_change()` | Allows mode change only when safe and idle |
+| `validate_motion_request()` | Checks limits, homing, safety, and target range |
+| `execute_manual_motion()` | Runs manual move/home/jog request |
+| `execute_semi_auto_step()` | Runs one scan step |
+| `publish_plc_event()` | Sends one PLC event and waits for PC ACK |
+| `monitor_heartbeat()` | Detects PC communication loss |
+| `open_capture_window()` | Allows PC to capture at the correct time |
+| `enter_error_state()` | Stops/holds machine and reports fault |
+| `validate_reset()` | Allows reset only after fault conditions are cleared |
+
+### 19.3 Database Functions
+
+| Function | Description |
+|---|---|
+| `create_run()` | Creates a new inspection run |
+| `update_run_status()` | Updates run status such as running, complete, interrupted |
+| `create_or_update_step()` | Records PLC scan step status |
+| `insert_image()` | Records image path, row, column, side, checksum, and result |
+| `insert_event_log()` | Records event, sequence, ACK, payload, and state |
+| `insert_error_log()` | Records error code, source, state, and recovery action |
+| `save_calibration_result()` | Stores active calibration parameters and quality metrics |
+
+---
+
+## 20. Tests and Validation
+
+The following compiled test matrix summarizes the required tests.
+
+![13_test_matrix_chart](https://hackmd.io/_uploads/rJS8HswfGl.png)
+
+### 20.1 Startup Tests
+
+| Test | Expected Result |
+|---|---|
+| PLC power on | PLC enters ready state |
+| PC software launch | PC reaches ready state |
+| Camera connection | Top/bottom cameras detected |
+| Database connection | Database connected |
+| Image folder access | Save path writable |
+| HMI connection | HMI displays live status |
+
+### 20.2 Communication Tests
+
+| Test | Expected Result |
+|---|---|
+| PC sends `PC_READY` | PLC replies `PLC_READY` |
+| PC requests manual mode | PLC acknowledges and publishes `MODE_CHANGED` |
+| PC requests semi-auto mode | PLC acknowledges and publishes `MODE_CHANGED` |
+| PLC publishes event | PC ACKs before next PLC event |
+| Heartbeat active | No communication timeout |
+| Ethernet disconnect test | PLC/PC detect communication loss and enter safe behavior |
+
+### 20.3 Vision Tests
+
+| Test | Expected Result |
+|---|---|
+| Continuous acquisition | Frames update continuously |
+| Fresh frame check | PC detects valid frame timestamp |
+| Manual capture | Image saved and verified |
+| Dual-camera capture | Top and bottom images saved |
+| Image database insert | `images` table receives metadata |
+| AOI result update | PASS/FAIL result updates database |
+
+### 20.4 Control Tests
+
+| Test | Expected Result |
+|---|---|
+| Manual home | PLC homes axis safely |
+| Manual move | PLC moves to target and reports done |
+| Out-of-range move | PLC rejects with payload/range error |
+| Semi-auto one step | PLC moves, PC captures, PLC completes step |
+| Pause during semi-auto | PLC enters paused/hold state |
+| Stop during semi-auto | PLC stops safely and run is marked stopped |
+
+### 20.5 Fault-Injection Tests
+
+| Fault | Expected Response |
+|---|---|
+| Camera disconnected | PC rejects capture and logs camera error |
+| Storage full | PC rejects capture and logs storage error |
+| PLC motion timeout | PLC publishes motion error |
+| E-stop pressed | PLC enters safety error state |
+| Database unavailable | PC uses fallback or blocks semi-auto start according to policy |
+| PC does not ACK PLC event | PLC waits, then communication timeout |
+| PLC does not ACK PC event | PC timeout and stop/recovery path |
+| Wrong step index | PC rejects capture and logs sequence mismatch |
+
+---
+
+## 21. Calibration Routine: Manual and Automatic
+
+Calibration uses a ChArUco pattern with known physical dimensions. The exact printed pattern dimensions must match the software configuration.
+
+### 21.1 Calibration Purpose
+
+Calibration is used to determine:
+
+- Camera intrinsic parameters
+- Lens distortion
+- Pixel-to-mm scale
+- Image-to-machine coordinate transform
+- Top/bottom camera alignment
+- Field-of-view coverage
+- Calibration pass/fail quality
+
+### 21.2 Calibration Responsibilities
+
+| Function | Owner |
+|---|---|
+| Machine safety | PLC |
+| Calibration mode permission | PLC |
+| XY table movement | PLC |
+| Camera acquisition | PC |
+| ChArUco marker detection | PC |
+| Calibration computation | PC |
+| Calibration pass/fail decision | PC |
+| Calibration result storage | PC / Database |
+| Operator approval | HMI / PC |
+
+### 21.3 ChArUco Pattern Information
+
+| Parameter | Required Entry |
+|---|---|
+| Pattern ID | TBD |
+| Pattern version | TBD |
+| Board rows | TBD |
+| Board columns | TBD |
+| Square length | TBD mm |
+| Marker length | TBD mm |
+| ArUco dictionary | TBD |
+| Pattern orientation | TOP/BOTTOM/FORWARD marking required |
+| Pattern flatness | Must be verified before use |
+
+### 21.4 Auto Calibration Flow
+
+
+![10_auto_calibration_flowchart](https://hackmd.io/_uploads/BkIvSiDfzg.png)
+
+Recommended sequence:
+
+1. Install the ChArUco calibration pattern.
+2. Select **Auto Calibration**.
+3. Confirm the pattern is secured and the machine area is clear.
+4. PC requests calibration mode from PLC.
+5. PLC verifies idle and safe conditions.
+6. PLC moves to each calibration pose.
+7. PC captures top/bottom calibration images.
+8. PC detects ChArUco corners.
+9. PC computes calibration parameters.
+10. PC validates calibration quality.
+11. PC stores raw images, annotated images, and calibration result.
+12. Operator confirms pass/fail result.
+13. PLC exits calibration mode.
+
+### 21.5 Manual Calibration Flow
+
+
+![11_manual_calibration_flowchart](https://hackmd.io/_uploads/HJfuHivMzx.png)
+
+Manual calibration is used when an engineer wants to capture selected poses manually or when automatic calibration motion is not suitable.
+
+Recommended sequence:
+
+1. Install the ChArUco pattern.
+2. Select **Manual Calibration**.
+3. Move to the first calibration pose manually.
+4. Confirm motion has stopped and the image is stable.
+5. Capture calibration image.
+6. Repeat for all required poses.
+7. Compute calibration.
+8. Review quality metrics.
+9. Approve or reject calibration result.
+10. Save accepted calibration as active only after approval.
+
+### 21.6 Calibration Quality Checks
+
+| Check | Requirement |
+|---|---|
+| Pattern detection | Minimum ChArUco corners detected |
+| Coverage | Pattern appears in enough image regions |
+| Reprojection error | Below configured threshold |
+| Pixel-to-mm consistency | Within configured tolerance |
+| Rotation error | Below configured tolerance |
+| Top/bottom alignment | Within configured tolerance |
+| Image quality | No severe blur, glare, underexposure, or overexposure |
+| File verification | Calibration images saved and readable |
+| Pattern version | Software pattern definition matches physical pattern |
+
+### 21.7 Calibration Statuses
+
+| Status | Meaning |
+|---|---|
+| `CALIBRATION_IDLE` | No calibration active |
+| `CALIBRATION_PATTERN_REQUIRED` | Operator must install target |
+| `CALIBRATION_MODE_REQUESTED` | PC requested PLC calibration mode |
+| `CALIBRATION_MOVING` | PLC moving to calibration pose |
+| `CALIBRATION_CAPTURING` | PC capturing calibration image |
+| `CALIBRATION_COMPUTING` | PC calculating calibration |
+| `CALIBRATION_PASS` | Calibration accepted |
+| `CALIBRATION_FAIL_DETECTION` | Pattern detection failed |
+| `CALIBRATION_FAIL_REPROJECTION` | Reprojection error too high |
+| `CALIBRATION_FAIL_ALIGNMENT` | Machine/camera alignment failed |
+| `CALIBRATION_FAIL_STORAGE` | Calibration files could not be saved |
+| `CALIBRATION_ABORTED` | Operator or system aborted calibration |
+
+### 21.8 Calibration Records
+
+The database should store calibration history.
+
+Minimum calibration data:
+
+- Calibration UUID
+- Machine ID
+- Camera side
+- Pattern ID
+- Pattern dimensions
+- Operator ID
+- Raw image paths
+- Annotated image paths
+- Camera matrix
+- Distortion coefficients
+- Homography
+- Machine-to-camera transform
+- Reprojection error
+- Alignment error
+- Pass/fail result
+- Active calibration flag
+
+Recommended folder structure:
+
+```text
+calibration/
+    {machine_id}/
+        {camera_side}/
+            {calibration_uuid}/
+                raw_images/
+                annotated_images/
+                calibration_result.json
+                calibration_report.json
+```
+
+---
+
+## 22. Diagram Index
+
+| Diagram | File |
+|---|---|
+| Overall functional connection | `compiled_diagrams/01_overall_functional_connection.png` |
+| Vision capture dataflow | `compiled_diagrams/02_vision_capture_dataflow.png` |
+| PC/PLC event communication | `compiled_diagrams/03_pc_plc_event_communication_sequence.png` |
+| High-level control flow | `compiled_diagrams/04_high_level_control_flow.png` |
+| Manual mode control flow | `compiled_diagrams/05_manual_mode_control_flow.png` |
+| Semi-auto mode control flow | `compiled_diagrams/06_semi_auto_mode_control_flow.png` |
+| Database and storage flow | `compiled_diagrams/07_database_storage_flow.png` |
+| Fault handling | `compiled_diagrams/08_fault_handling_flowchart.png` |
+| System state diagram | `compiled_diagrams/09_system_state_diagram.png` |
+| Auto calibration flow | `compiled_diagrams/10_auto_calibration_flowchart.png` |
+| Manual calibration flow | `compiled_diagrams/11_manual_calibration_flowchart.png` |
+| Operating sequence to error-code reverse chart | `compiled_diagrams/12_operating_sequence_error_reverse_chart.png` |
+| Test matrix chart | `compiled_diagrams/13_test_matrix_chart.png` |
+
+
+# Appendix A: Error Code Reference  
 ## Vision Capture System: PC ↔ PLC Event Communication
 
 ## 1. Purpose
