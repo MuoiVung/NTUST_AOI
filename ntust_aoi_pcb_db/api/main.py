@@ -92,6 +92,15 @@ async def lifespan(app: FastAPI):
         _pool.closeall()
 
 app = FastAPI(title="AOI API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.router.redirect_slashes = False
 
 # ─── WebSocket Connection Manager ─────────────────────────────────────────────
@@ -149,49 +158,50 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/runs/")
 def get_runs(
     limit: int = 50,
+    offset: int = 0,
     board_number: Optional[str] = None,
-    order_number: Optional[str] = None,
+    m_no: Optional[str] = None,
     status: Optional[str] = None,
     serial_number: Optional[str] = None,
 ):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            query = "SELECT * FROM runs WHERE 1=1"
+            base_query = " FROM runs WHERE 1=1"
             params: list = []
             if board_number:
-                query += " AND board_number ILIKE %s"
+                base_query += " AND board_number ILIKE %s"
                 params.append(f"%{board_number}%")
-            if order_number:
-                query += " AND order_number ILIKE %s"
-                params.append(f"%{order_number}%")
+            if m_no:
+                base_query += " AND m_no ILIKE %s"
+                params.append(f"%{m_no}%")
             if status:
-                query += " AND status = %s"
+                base_query += " AND status = %s"
                 params.append(status)
             if serial_number:
-                query += " AND serial_number ILIKE %s"
+                base_query += " AND serial_number ILIKE %s"
                 params.append(f"%{serial_number}%")
 
-            query += " ORDER BY created_at DESC LIMIT %s"
-            params.append(limit)
+            # Get total count
+            count_query = "SELECT COUNT(*)" + base_query
+            cur.execute(count_query, params)
+            total_count = cur.fetchone()["count"]
+
+            # Get paginated data
+            query = "SELECT *" + base_query + " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
 
             cur.execute(query, params)
             rows = cur.fetchall()
 
-            return [
+            data = [
                 {
                     **dict(row),
                     "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
@@ -199,6 +209,8 @@ def get_runs(
                 }
                 for row in rows
             ]
+            
+            return {"data": data, "total": total_count}
     finally:
         release_db_connection(conn)
 
@@ -465,10 +477,42 @@ def get_system_status():
     # Camera is hardcoded OK for now
     camera_status = "OK"
     
+    current_order = "-"
+    actual_quantity = 0
+    is_processing = False
+    active_sn = ""
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get latest run info
+            cur.execute("SELECT m_no, serial_number, status FROM runs ORDER BY start_time DESC LIMIT 1")
+            run_row = cur.fetchone()
+            if run_row:
+                current_order = run_row["m_no"] or "-"
+                active_sn = run_row["serial_number"] or ""
+                # Note: is_processing is managed by frontend via WebSocket events only.
+                # We do not derive it from DB run status here to avoid polling conflicts.
+                
+            # Get actual quantity for this order
+            cur.execute("SELECT actual_quantity FROM orders WHERE m_no = %s", (current_order,))
+            ord_row = cur.fetchone()
+            if ord_row:
+                actual_quantity = ord_row["actual_quantity"]
+    except Exception as e:
+        print(f"Error in /system/status DB query: {e}")
+        pass
+    finally:
+        if conn:
+            release_db_connection(conn)
+            
     return {
         "plc": plc_status,
         "shopfloor": api_status,
-        "camera": camera_status
+        "camera": camera_status,
+        "current_order": current_order,
+        "active_sn": active_sn,
+        "actual_quantity": actual_quantity,
+        "is_processing": is_processing
     }
 
 
@@ -477,7 +521,7 @@ def get_configs():
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM system_configs ORDER BY config_key")
+            cur.execute("SELECT * FROM system_configs WHERE config_name NOT IN ('pending_run_sn', 'plc_status') ORDER BY config_key")
             return [dict(r) for r in cur.fetchall()]
     finally:
         release_db_connection(conn)
@@ -531,7 +575,9 @@ def init_configs():
             # Pre-register the mandatory keys with empty values if they don't exist
             configs = [
                 ('longterm_sync_interval', '0', 'Seconds'),
-                ('sync_retry_interval', '0', 'Seconds')
+                ('sync_retry_interval', '0', 'Seconds'),
+                ('camera_fov_step_mm', '40.0', 'mm'),
+                ('camera_margin_mm', '10.0', 'mm')
             ]
             for name, val, unit in configs:
                 cur.execute(

@@ -2,7 +2,7 @@
 -- Scenario: Create an old run that should be moved to long-term storage
 
 -- 1. Create a Test Order
-INSERT INTO orders (order_number, target_quantity, actual_quantity, status, created_at)
+INSERT INTO orders (m_no, target_quantity, actual_quantity, status, created_at)
 VALUES ('TEST-ORDER-001', 100, 1, 'ACTIVE', CURRENT_TIMESTAMP - INTERVAL '40 days');
 
 -- 2. Create a Test Board Recipe
@@ -10,7 +10,7 @@ INSERT INTO board_numbers (board_number, grid_rows, grid_cols, created_at)
 VALUES ('TEST-BOARD-5X5', 5, 5, CURRENT_TIMESTAMP - INTERVAL '40 days');
 
 -- 3. Create a Test Run (Set to 40 days ago)
-INSERT INTO runs (run_number, serial_number, board_number, order_number, machine_id, status, start_time, created_at)
+INSERT INTO runs (run_number, serial_number, board_number, m_no, machine_id, status, start_time, created_at)
 VALUES (
     'RUN_SYNC_TEST_001', 
     'SN-TEST-999', 

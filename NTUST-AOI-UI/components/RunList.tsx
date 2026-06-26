@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { inspectionService } from '../services/inspectionService';
 import { InspectionRun } from '../types';
 import { formatTimestamp } from '../utils/formatters';
@@ -6,22 +6,64 @@ import { formatTimestamp } from '../utils/formatters';
 export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, onCreate: () => void }) => {
     const [runs, setRuns] = useState<InspectionRun[]>([]);
     const [statusFilter, setStatusFilter] = useState<string>('All');
-    const [boardFilter, setBoardFilter] = useState<string>('');
     const [orderFilter, setOrderFilter] = useState<string>('');
     const [serialFilter, setSerialFilter] = useState<string>('');
     const [loading, setLoading] = useState(false);
 
+    // Pagination State
+    const [page, setPage] = useState<number>(1);
+    const [pageSize, setPageSize] = useState<number>(10);
+    const [totalCount, setTotalCount] = useState<number>(0);
+
+    const cache = useRef<Map<string, InspectionRun[]>>(new Map());
+
+    const getCacheKey = (p: number, ps: number, status: string, order: string, serial: string) => {
+        return `${p}-${ps}-${status}-${order}-${serial}`;
+    };
+
+    const fetchPage = async (p: number, ps: number) => {
+        const filters: any = { limit: ps, offset: (p - 1) * ps };
+        if (statusFilter !== 'All') filters.status = statusFilter;
+        if (orderFilter) filters.m_no = orderFilter;
+        if (serialFilter) filters.serial_number = serialFilter;
+        
+        return await inspectionService.getInspectionRuns(filters);
+    };
+
+    const preloadPages = async (currentPage: number, ps: number, total: number) => {
+        const maxPage = Math.ceil(total / ps);
+        for (let i = 1; i <= 2; i++) {
+            const nextPage = currentPage + i;
+            if (nextPage > maxPage) break;
+            const key = getCacheKey(nextPage, ps, statusFilter, orderFilter, serialFilter);
+            if (!cache.current.has(key)) {
+                fetchPage(nextPage, ps).then(res => {
+                    cache.current.set(key, res.data);
+                }).catch(() => {});
+            }
+        }
+    };
+
     const fetchRuns = async () => {
         setLoading(true);
         try {
-            const filters: any = {};
-            if (statusFilter !== 'All') filters.status = statusFilter;
-            if (boardFilter) filters.board_number = boardFilter;
-            if (orderFilter) filters.order_number = orderFilter;
-            if (serialFilter) filters.serial_number = serialFilter;
-
-            const data = await inspectionService.getInspectionRuns(filters);
-            setRuns(data);
+            const key = getCacheKey(page, pageSize, statusFilter, orderFilter, serialFilter);
+            let resultData: InspectionRun[];
+            let currentTotal = totalCount;
+            
+            if (cache.current.has(key)) {
+                resultData = cache.current.get(key)!;
+                setRuns(resultData);
+            } else {
+                const response = await fetchPage(page, pageSize);
+                resultData = response.data;
+                currentTotal = response.total;
+                cache.current.set(key, resultData);
+                setRuns(resultData);
+                setTotalCount(currentTotal);
+            }
+            
+            preloadPages(page, pageSize, currentTotal);
         } catch (error) {
             console.error('Failed to fetch runs', error);
         } finally {
@@ -29,9 +71,17 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
         }
     };
 
+    // Reset to page 1 on filter or page size changes
     useEffect(() => {
-        fetchRuns();
-    }, [statusFilter, boardFilter, orderFilter]);
+        setPage(1);
+    }, [statusFilter, orderFilter, serialFilter, pageSize]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchRuns();
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [statusFilter, orderFilter, serialFilter, page, pageSize]);
 
     const StatusBadge = ({ status }: { status: string }) => {
         const isPass = status === 'COMPLETED' || status === 'PASS';
@@ -84,16 +134,7 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                         </select>
                     </div>
 
-                    <div className="flex flex-1 min-w-[150px] items-center gap-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 px-3 h-10 shadow-sm">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Board ID</span>
-                        <input
-                            type="text"
-                            placeholder="Search board..."
-                            value={boardFilter}
-                            onChange={(e) => setBoardFilter(e.target.value)}
-                            className="bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 focus:outline-none w-full"
-                        />
-                    </div>
+
 
                     <div className="flex flex-1 min-w-[150px] items-center gap-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 px-3 h-10 shadow-sm">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order</span>
@@ -115,19 +156,18 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                 type="text"
                                 value={serialFilter}
                                 onChange={(e) => setSerialFilter(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && fetchRuns()}
                             />
                         </div>
                     </div>
                 </div>
 
                 {/* Table */}
-                <div className="w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+                <div className="w-full overflow-hidden rounded-t-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[1000px]">
                             <thead>
                                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                                    {['Run Number', 'Timestamp', 'Serial Number', 'Board ID', 'Order ID', 'Status', 'Machine', 'Actions'].map(h => (
+                                    {['Run Number', 'Timestamp', 'Serial Number', 'Order ID', 'Status', 'Machine', 'Actions'].map(h => (
                                         <th key={h} className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 font-display last:text-right">{h}</th>
                                     ))}
                                 </tr>
@@ -140,8 +180,8 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatTimestamp(run.timestamp)}</td>
                                         <td className="px-6 py-4 text-sm font-mono text-slate-700 dark:text-slate-300">{run.serial_number}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{run.board_number}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{run.order_number}</td>
+
+                                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{run.m_no}</td>
                                         <td className="px-6 py-4"><StatusBadge status={run.status} /></td>
                                         <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
                                             <div className="flex items-center gap-2">
@@ -176,6 +216,46 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+                
+                {/* Pagination Controls */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-800 border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-xl px-6 py-4 shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">Rows per page:</span>
+                        <select 
+                            value={pageSize} 
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 rounded px-2 py-1 focus:outline-none focus:border-primary"
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
+                            Showing {runs.length > 0 ? (page - 1) * pageSize + 1 : 0} to {Math.min(page * pageSize, totalCount)} of {totalCount}
+                        </span>
+                        
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-500 dark:text-slate-400 transition-colors"
+                            >
+                                <span className="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button 
+                                onClick={() => setPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                                disabled={totalCount === 0 || page >= Math.ceil(totalCount / pageSize)}
+                                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-500 dark:text-slate-400 transition-colors"
+                            >
+                                <span className="material-symbols-outlined">chevron_right</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

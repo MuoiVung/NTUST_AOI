@@ -15,7 +15,7 @@ export interface DashboardMetrics {
 }
 
 export interface Order {
-    order_number: string;
+    m_no: string;
     target_quantity: number;
     actual_quantity: number;
     status: string;
@@ -33,11 +33,22 @@ export interface InspectionRun {
     run_number: string;
     serial_number: string;
     board_number: string;
-    order_number: string;
+    m_no: string;
     machine_id: string;
     status: string;
     start_time: string;
     created_at: string;
+}
+
+export interface RunDetail {
+    run_number: string;
+    serial_number: string;
+    m_no: string;
+    machine_id: string;
+    status: string;
+    start_time: string;
+    created_at: string;
+    images: CapturedImage[];
 }
 
 export interface CapturedImage {

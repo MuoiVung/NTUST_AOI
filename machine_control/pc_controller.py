@@ -104,9 +104,10 @@ class PcController:
         self.requested_step: Optional[int] = None
         self.manual_command: Optional[tuple[EventCode, list[int], tuple[float, float] | None]] = None
         self.manual_points = [(20.0, 15.0), (40.0, 15.0), (40.0, 35.0)]
-        self.manual_index = 0
-
+        self.operator_id = ""
         self.run_code: Optional[str] = None
+        self.m_no: str = "UNKNOWN_M_NO"
+        self.manual_index = 0
         self.recipe: Optional[Recipe] = None
         self.step_ids: dict[int, int] = {}
         self.last_lookup: Optional[SerialLookupResult] = None
@@ -163,6 +164,7 @@ class PcController:
                 self.client.connect()
                 print(f"[PC] connected to PLC at {self.host}:{self.port}")
                 self.db.set_config("plc_status", "OK")
+                self.mailbox.sync_sequence()
                 self.mailbox.publish_pc_event(EventCode.PC_READY)
                 self.log_pc_event(EventCode.PC_READY, None, None, [], "PC_TO_PLC")
                 self.transition(PcState.WAIT_PLC_READY)
@@ -279,7 +281,11 @@ class PcController:
                     y_mm=y_mm,
                     plc_event_sequence=None,
                     note="manual mode image",
-                    run_code=self.run_code or "MANUAL_RUN"
+                    run_code=self.run_code or "MANUAL_RUN",
+                    m_no=self.m_no,
+                    sn=self.serial_number or "UNKNOWN_SN",
+                    row_idx=0,
+                    col_idx=self.manual_index
                 )
                 self.log_camera_image(path_top, self.manual_index, self.camera_top)
 
@@ -290,7 +296,11 @@ class PcController:
                     y_mm=y_mm,
                     plc_event_sequence=None,
                     note="manual mode image",
-                    run_code=self.run_code or "MANUAL_RUN"
+                    run_code=self.run_code or "MANUAL_RUN",
+                    m_no=self.m_no,
+                    sn=self.serial_number or "UNKNOWN_SN",
+                    row_idx=0,
+                    col_idx=self.manual_index
                 )
                 self.log_camera_image(path_bottom, self.manual_index, self.camera_bottom)
                 self.transition(PcState.MANUAL_REPORT_CAPTURE_DONE)
@@ -367,6 +377,14 @@ class PcController:
 
         elif self.state == PcState.SEMI_CAPTURE_IMAGE:
             x_mm, y_mm = self.current_position if self.current_position else (None, None)
+            row_idx = 0
+            col_idx = self.requested_step or 0
+            if self.recipe and self.recipe.steps:
+                for s in self.recipe.steps:
+                    if s.step_index == self.requested_step:
+                        row_idx = s.row_idx
+                        col_idx = s.col_idx
+                        break
             try:
                 path_top = self.camera_top.save_latest(
                     mode="SEMI_AUTO",
@@ -375,7 +393,11 @@ class PcController:
                     y_mm=y_mm,
                     plc_event_sequence=None,
                     note="semi-auto mode image",
-                    run_code=self.run_code or "SEMI_RUN"
+                    run_code=self.run_code or "SEMI_RUN",
+                    m_no=self.m_no,
+                    sn=self.serial_number or "UNKNOWN_SN",
+                    row_idx=row_idx,
+                    col_idx=col_idx
                 )
                 self.log_camera_image(path_top, self.requested_step, self.camera_top)
 
@@ -386,7 +408,11 @@ class PcController:
                     y_mm=y_mm,
                     plc_event_sequence=None,
                     note="semi-auto mode image",
-                    run_code=self.run_code or "SEMI_RUN"
+                    run_code=self.run_code or "SEMI_RUN",
+                    m_no=self.m_no,
+                    sn=self.serial_number or "UNKNOWN_SN",
+                    row_idx=row_idx,
+                    col_idx=col_idx
                 )
                 self.log_camera_image(path_bottom, self.requested_step, self.camera_bottom)
                 self.mark_step(self.requested_step, "CAPTURED", capture_done_at="CURRENT_TIMESTAMP")
@@ -461,7 +487,29 @@ class PcController:
                 return False
             length, width = validate_board_dimensions(lookup.pcb_length_mm, lookup.pcb_width_mm)
             self.recipe = generate_grid_recipe(length, width, name=f"grid_{int(length)}x{int(width)}")
-            self.run_code = f"{lookup.sn or self.serial_number}_{self.board_side}_{int(time.time())}"
+            self.m_no = lookup.m_no or "UNKNOWN_M_NO"
+            
+            # 1. Invalidates previous incomplete runs and gets deleted run codes
+            import datetime
+            import os
+            import shutil
+            sn_for_run = lookup.sn or self.serial_number
+            deleted_runs = self.db.check_and_invalidate_previous_runs(sn_for_run)
+            
+            # Delete physical folders of incomplete runs
+            watch_dir = os.getenv("IMAGE_WATCH_DIR", os.path.join(os.path.dirname(__file__), "..", "watch_dir"))
+            for d_run in deleted_runs:
+                # Top side
+                run_path_top = os.path.join(watch_dir, self.m_no, sn_for_run, d_run, "TOP")
+                if os.path.exists(run_path_top):
+                    shutil.rmtree(run_path_top, ignore_errors=True)
+                # Bottom side
+                run_path_bottom = os.path.join(watch_dir, self.m_no, sn_for_run, d_run, "BOTTOM")
+                if os.path.exists(run_path_bottom):
+                    shutil.rmtree(run_path_bottom, ignore_errors=True)
+            
+            # 2. ISO 8601-like run_code
+            self.run_code = f"{sn_for_run}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             self.db.create_run(
                 RunInfo(
                     run_code=self.run_code,
@@ -766,7 +814,6 @@ class PcController:
                     with conn.cursor() as cur:
                         assignments = ", ".join(f"{name} = CURRENT_TIMESTAMP" for name in timestamp_fields)
                         cur.execute(f"UPDATE run_steps SET {assignments} WHERE step_id = %s", (step_id,))
-                    conn.commit()
                 except Exception as e:
                     print(f"[DB] Error updating timestamp: {e}")
 
@@ -846,7 +893,7 @@ class RealCameraSDK:
     def latest_frame_fresh(self) -> bool:
         return True
 
-    def save_latest(self, mode: str, step_index: Optional[int], x_mm: Optional[float], y_mm: Optional[float], plc_event_sequence: Optional[int], note: str, run_code: str) -> Path:
+    def save_latest(self, mode: str, step_index: Optional[int], x_mm: Optional[float], y_mm: Optional[float], plc_event_sequence: Optional[int], note: str, run_code: str, m_no: str = "UNKNOWN_M_NO", sn: str = "UNKNOWN_SN", row_idx: int = 0, col_idx: int = 0) -> Path:
         self.image_index += 1
         import os
         import random
@@ -855,12 +902,14 @@ class RealCameraSDK:
         watch_dir = os.getenv("IMAGE_WATCH_DIR", os.path.join(os.path.dirname(__file__), "..", "watch_dir"))
         mock_dir = os.path.join(os.path.dirname(__file__), "..", "mock_images")
         
-        os.makedirs(watch_dir, exist_ok=True)
+        # New structure: watch_dir/{M_NO}/{SN}/{run_code}/{board_side}/
+        run_folder = os.path.join(watch_dir, m_no, sn, run_code, self.side)
+        os.makedirs(run_folder, exist_ok=True)
         os.makedirs(mock_dir, exist_ok=True)
         
-        # Include side in filename
-        filename = f"{run_code}_{self.side}_R{step_index}_C0_{self.image_index}.jpg"
-        filepath = os.path.join(watch_dir, filename)
+        # New filename: {run_code}_{side}_r{row_idx}_c{col_idx}.jpg
+        filename = f"{run_code}_{self.side}_r{row_idx}_c{col_idx}.jpg"
+        filepath = os.path.join(run_folder, filename)
         
         mock_images = [f for f in os.listdir(mock_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
         if mock_images:

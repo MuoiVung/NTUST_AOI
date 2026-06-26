@@ -1,4 +1,4 @@
-import { DashboardMetrics, InspectionRun, RunDetail, Alert, InspectionStatus, SystemConfig } from "../types";
+import { DashboardMetrics, InspectionRun, RunDetail, InspectionStatus, SystemConfig } from "../types";
 import { MOCK_ALERTS, MOCK_METRICS } from "./mockData";
 
 // ─── API Base URLs ────────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ interface RunApiResponse {
     run_number: string;
     serial_number: string;
     board_number: string;
-    order_number: string;
+    m_no: string;
     machine_id: string;
     status: string;
     start_time?: string;
@@ -67,30 +67,34 @@ export const inspectionService = {
     },
 
     getInspectionRuns: async (filters?: {
+        limit?: number;
+        offset?: number;
         board_number?: string;
-        order_number?: string;
+        m_no?: string;
         status?: string;
         serial_number?: string;
-    }): Promise<InspectionRun[]> => {
-        const params = new URLSearchParams({ limit: '50' });
+    }): Promise<{ data: InspectionRun[]; total: number }> => {
+        const params = new URLSearchParams({ limit: (filters?.limit ?? 50).toString(), offset: (filters?.offset ?? 0).toString() });
         if (filters?.board_number)  params.append('board_number',  filters.board_number);
-        if (filters?.order_number)  params.append('order_number',  filters.order_number);
+        if (filters?.m_no)  params.append('m_no',  filters.m_no);
         if (filters?.status)        params.append('status',        filters.status);
         if (filters?.serial_number) params.append('serial_number', filters.serial_number);
 
-        const data = await apiFetch<RunApiResponse[]>(`/runs/?${params}`);
+        const response = await apiFetch<{ data: RunApiResponse[]; total: number }>(`/runs/?${params}`);
 
-        return data.map(run => ({
+        const runs = response.data.map(run => ({
             run_number:    run.run_number,
             serial_number: run.serial_number,
             board_number:  run.board_number,
-            order_number:  run.order_number,
+            m_no:  run.m_no,
             timestamp:    run.created_at ?? run.start_time ?? '',
             status:       run.status,
             machine_id:   run.machine_id,
             start_time:   run.start_time ?? '',
             created_at:   run.created_at ?? '',
         }));
+        
+        return { data: runs, total: response.total };
     },
 
     getRunDetail: async (runNumber: string, limit = 50, offset = 0): Promise<RunDetail> => {
@@ -102,20 +106,25 @@ export const inspectionService = {
         ]);
 
         return {
-            runId:       runData.run_number,
-            batchId:     runData.board_number,
-            line:        runData.machine_id,
-            startTime:   runData.start_time ?? '',
-            endTime:     runData.created_at ?? '',
-            totalBoards: 1,
-            defectRate:  0,
-            operator:    runData.machine_id,
+            run_number:    runData.run_number,
+            serial_number: runData.serial_number,
+            m_no:  runData.m_no,
+            machine_id:    runData.machine_id,
+            status:        runData.status,
+            start_time:    runData.start_time ?? '',
+            created_at:    runData.created_at ?? '',
             images: imagesData.map(img => ({
-                id:       img.image_id,
-                position: `${img.side} (R${img.row_idx ?? 0}-C${img.col_idx ?? 0})`,
-                status:   mapStatus(img.condition),
-                imageUrl: `${getApiBaseUrl()}/images/proxy/${img.image_id}`,
-                region:   `${img.side} Zone ${img.row_idx ?? 0}-${img.col_idx ?? 0}`,
+                image_id:             img.image_id,
+                run_number:           img.run_number,
+                side:                 img.side,
+                local_path:           img.local_path ? `${getApiBaseUrl()}/images/proxy/${img.image_id}` : null,
+                longterm_path:        img.longterm_path,
+                is_uploaded_longterm: img.is_uploaded_longterm,
+                row_idx:              img.row_idx ?? 0,
+                col_idx:              img.col_idx ?? 0,
+                condition:            mapStatus(img.condition),
+                file_size_bytes:      img.file_size_bytes ?? 0,
+                capture_time:         img.capture_time ?? ''
             })),
         };
     },

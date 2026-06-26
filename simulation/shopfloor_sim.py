@@ -1,4 +1,5 @@
 import uvicorn
+import random
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
@@ -40,9 +41,10 @@ def get_serial_info(sn: str = Query(..., description="Serial Number")):
         return JSONResponse(content=MOCK_DATABASE[sn_stripped])
     elif sn_stripped.startswith("SN"):
         # Auto-accept any code starting with 'SN'
+        m_no = random.choice(["MO-TEST-001", "MO-TEST-002", "MO-TEST-003"])
         return JSONResponse(content={
             "SN": sn_stripped,
-            "M_NO": "MO-AUTO-GEN",
+            "M_NO": m_no,
             "P_NO": "PO-AUTO-GEN",
             "SemiModel": "AUTO_BOARD",
             "PCB_Length": "84",

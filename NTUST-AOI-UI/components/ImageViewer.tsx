@@ -15,8 +15,6 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
     const [isDragging, setIsDragging] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
 
-    const [note, setNote] = useState(image.note || '');
-    const [isSaving, setIsSaving] = useState(false);
     const [showMobilePanel, setShowMobilePanel] = useState(false);
 
     const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.5, 5));
@@ -48,25 +46,14 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
         setIsDragging(false);
     };
 
-    const handleSaveNote = async () => {
-        setIsSaving(true);
-        try {
-            await inspectionService.updateImage(image.id, { note });
-            onUpdate({ ...image, note });
-        } catch (error) {
-            console.error('Failed to save note', error);
-            alert('Failed to save note');
-        } finally {
-            setIsSaving(false);
-        }
-    };
+
 
     const handleDelete = async () => {
         if (!window.confirm("⚠️ Are you sure you want to PERMANENTLY delete this image?\nThis will remove the file from the local disk and database.")) return;
         
         try {
-            await inspectionService.deleteImage(image.id);
-            if (onDelete) onDelete(image.id);
+            await inspectionService.deleteImage(image.image_id);
+            if (onDelete) onDelete(image.image_id);
             onClose();
         } catch (error) {
             console.error('Failed to delete image', error);
@@ -75,10 +62,10 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
     };
 
     const handleToggleStatus = async () => {
-        const newStatus = image.status === InspectionStatus.PASS ? InspectionStatus.FAIL : InspectionStatus.PASS;
+        const newStatus = image.condition === InspectionStatus.PASS ? InspectionStatus.FAIL : InspectionStatus.PASS;
         try {
-            await inspectionService.updateImage(image.id, { condition: newStatus });
-            onUpdate({ ...image, status: newStatus });
+            await inspectionService.updateImage(image.image_id, { condition: newStatus });
+            onUpdate({ ...image, condition: newStatus });
         } catch (error) {
             console.error('Failed to update status', error);
         }
@@ -139,8 +126,8 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
                         }}
                     >
                         <img
-                            src={image.imageUrl}
-                            alt={image.label}
+                            src={image.local_path || ''}
+                            alt={`R${image.row_idx} C${image.col_idx}`}
                             className="max-h-[100vh] md:max-h-[85vh] max-w-full object-contain select-none shadow-dark"
                             draggable={false}
                         />
@@ -164,8 +151,8 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
 
                     <div className="p-6 border-b border-slate-800 flex justify-between items-center">
                         <div>
-                            <h3 className="text-xl font-bold text-white font-display">{image.position}</h3>
-                            <p className="text-sm text-slate-400 font-mono truncate">{image.label}</p>
+                            <h3 className="text-xl font-bold text-white font-display">Row {image.row_idx} / Col {image.col_idx}</h3>
+                            <p className="text-sm text-slate-400 font-mono truncate">{image.side} Side</p>
                         </div>
                         {/* Desktop Close Button (hidden on mobile as we have floating one) */}
                         <button onClick={onClose} className="hidden md:flex p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors items-center justify-center">
@@ -178,36 +165,19 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
                             <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Inspection Status</label>
                             <button
                                 onClick={handleToggleStatus}
-                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ${image.status === InspectionStatus.PASS
+                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ${image.condition === InspectionStatus.PASS
                                     ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
                                     : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <span className={`size-3 rounded-full ${image.status === InspectionStatus.PASS ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></span>
-                                    <span className="font-bold">{image.status}</span>
+                                    <span className={`size-3 rounded-full ${image.condition === InspectionStatus.PASS ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></span>
+                                    <span className="font-bold">{image.condition}</span>
                                 </div>
                                 <span className="material-symbols-outlined text-sm">sync</span>
                             </button>
                         </div>
 
-                        <div className="space-y-3">
-                            <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">Inspection Note</label>
-                            <textarea
-                                value={note}
-                                onChange={(e) => setNote(e.target.value)}
-                                placeholder="Enter defects, notes, or observations..."
-                                className="w-full h-32 md:h-40 bg-slate-800 border-slate-700 border rounded-xl p-4 text-slate-200 placeholder:text-slate-600 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all resize-none"
-                            />
-                            <button
-                                onClick={handleSaveNote}
-                                disabled={isSaving || note === (image.note || '')}
-                                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-blue-600 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-primary/20"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">save</span>
-                                <span>{isSaving ? 'Saving...' : 'Save Notes'}</span>
-                            </button>
-                            
                             <button
                                 onClick={handleDelete}
                                 className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 font-bold py-3 rounded-xl transition-all shadow-lg mt-2"
@@ -215,16 +185,15 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
                                 <span className="material-symbols-outlined text-[20px]">delete</span>
                                 <span>Delete Image</span>
                             </button>
-                        </div>
 
-                        <div className="pt-6 border-t border-slate-800 space-y-4 text-xs">
+                        <div className="pt-6 border-t border-slate-800 space-y-4 text-xs mt-4">
                             <div className="flex justify-between">
-                                <span className="text-slate-500">Region</span>
-                                <span className="text-slate-300 font-medium">{image.region}</span>
+                                <span className="text-slate-500">File Size</span>
+                                <span className="text-slate-300 font-medium">{Math.round(image.file_size_bytes / 1024)} KB</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Image ID</span>
-                                <span className="text-slate-500 font-mono text-[10px] break-all ml-4">{image.id}</span>
+                                <span className="text-slate-500 font-mono text-[10px] break-all ml-4">{image.image_id}</span>
                             </div>
                         </div>
                     </div>

@@ -493,6 +493,14 @@ class PcEventMailbox:
         self.pc_sequence = 0
         self.last_plc_sequence_seen = 0
 
+    def sync_sequence(self) -> None:
+        """Read the current PLC sequence to avoid processing old events upon reconnection."""
+        try:
+            words = self.client.read_words(f"D{PLC_EVENT_BASE}", 2)
+            self.last_plc_sequence_seen = words[1]
+        except Exception:
+            pass
+
     def next_sequence(self) -> int:
         self.pc_sequence += 1
         if self.pc_sequence > 32767:

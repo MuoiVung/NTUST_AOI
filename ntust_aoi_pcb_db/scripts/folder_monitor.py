@@ -46,19 +46,18 @@ def get_db_connection():
         return None
 
 def insert_image_record(file_path, file_name, file_size):
-    # Regex to parse: [run_code]_R[row]_C[col]_[index].jpg
-    # Example: SN12345_TOP_1234567890_R2_C1_3.jpg
-    # Actually pc_controller produces: f"{run_code}_R{step_index}_C0_{self.image_index}.jpg"
-    # Or just extract R and C
-    match = re.search(r'^(.*)_R(\d+)_C(\d+)_(\d+)\.(jpg|jpeg|png|bmp|jfif)$', file_name, re.IGNORECASE)
+    # Regex to parse: [run_code]_[side]_r[row]_c[col].jpg
+    match = re.search(r'^(.*)_(TOP|BOTTOM)_r(\d+)_c(\d+)\.(jpg|jpeg|png|bmp|jfif)$', file_name, re.IGNORECASE)
     
     if match:
         run_number = match.group(1)
-        row_idx = int(match.group(2))
-        col_idx = int(match.group(3))
+        side = match.group(2)
+        row_idx = int(match.group(3))
+        col_idx = int(match.group(4))
     else:
         # Fallback if filename doesn't match
         run_number = "UNKNOWN_RUN"
+        side = "TOP"
         row_idx = 0
         col_idx = 0
 
@@ -78,9 +77,9 @@ def insert_image_record(file_path, file_name, file_size):
 
             insert_img_sql = """
             INSERT INTO images (run_number, side, local_path, row_idx, col_idx, condition, file_size_bytes)
-            VALUES (%s, 'Top', %s, %s, %s, 'UNKNOWN', %s)
+            VALUES (%s, %s, %s, %s, %s, 'UNKNOWN', %s)
             """
-            cur.execute(insert_img_sql, (run_number, logical_path, row_idx, col_idx, file_size))
+            cur.execute(insert_img_sql, (run_number, side.capitalize(), logical_path, row_idx, col_idx, file_size))
             conn.commit()
             logger.info(f"SUCCESS: Inserted record for '{file_name}' (Run: {run_number}, R{row_idx} C{col_idx})")
     except Exception as e:

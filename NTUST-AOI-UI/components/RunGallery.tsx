@@ -53,12 +53,12 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
     }, [runId, offset]);
 
     const handleImageUpdate = (updatedImage: CapturedImage) => {
-        setImages(imgs => imgs.map(img => img.id === updatedImage.id ? updatedImage : img));
+        setImages(imgs => imgs.map(img => img.image_id === updatedImage.image_id ? updatedImage : img));
         setSelectedImage(updatedImage);
     };
 
     const handleImageDelete = (imageId: string) => {
-        setImages(imgs => imgs.filter(img => img.id !== imageId));
+        setImages(imgs => imgs.filter(img => img.image_id !== imageId));
     };
 
     if (!detail && offset === 0) return <div className="p-10 font-medium text-slate-500">Loading data...</div>;
@@ -70,12 +70,12 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
             <aside className="hidden lg:flex flex-col w-80 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shrink-0 h-full overflow-y-auto">
                 <div className="flex flex-col gap-6 mb-8">
                     <div className="flex gap-4 items-start">
-                        <div className="bg-slate-100 rounded-lg size-16 shrink-0 bg-cover bg-center shadow-sm flex items-center justify-center text-primary border border-slate-200" style={{ backgroundImage: images[0]?.imageUrl ? `url(${images[0]?.imageUrl})` : 'none' }}>
-                            {!images[0]?.imageUrl && <span className="material-symbols-outlined">image</span>}
+                        <div className="bg-slate-100 rounded-lg size-16 shrink-0 bg-cover bg-center shadow-sm flex items-center justify-center text-primary border border-slate-200" style={{ backgroundImage: images[0]?.local_path ? `url(${images[0]?.local_path})` : 'none' }}>
+                            {!images[0]?.local_path && <span className="material-symbols-outlined">image</span>}
                         </div>
                         <div className="flex flex-col overflow-hidden">
-                            <h1 className="text-slate-900 dark:text-white text-xl font-bold leading-tight truncate">{detail.runId}</h1>
-                            <p className="text-slate-500 text-sm mt-1 truncate">Board: {detail.batchId}</p>
+                            <h1 className="text-slate-900 dark:text-white text-xl font-bold leading-tight truncate">{detail.run_number}</h1>
+                            <p className="text-slate-500 text-sm mt-1 truncate">Order: {detail.m_no}</p>
                         </div>
                     </div>
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -93,9 +93,9 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
                     <h3 className="text-slate-900 dark:text-white text-base font-bold border-b border-slate-100 dark:border-slate-800 pb-2">Run Details</h3>
                     <div className="grid grid-cols-[1fr_auto] gap-y-4 text-sm">
                         {[
-                            ['Start Time', formatTimestamp(detail.startTime)],
-                            ['End Time', formatTimestamp(detail.endTime)],
-                            ['Machine ID', detail.operator]
+                            ['Start Time', formatTimestamp(detail.start_time)],
+                            ['Created At', formatTimestamp(detail.created_at)],
+                            ['Machine ID', detail.machine_id]
                         ].map(([label, val]) => (
                             <div key={label as string} className="col-span-2 flex justify-between gap-2 overflow-hidden">
                                 <p className="text-slate-500 whitespace-nowrap">{label as string}</p>
@@ -115,7 +115,7 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
                             Inspection Runs
                         </button>
                         <span className="text-slate-400">/</span>
-                        <span className="text-slate-900 dark:text-white text-sm font-medium truncate">{detail.runId}</span>
+                        <span className="text-slate-900 dark:text-white text-sm font-medium truncate">{detail.run_number}</span>
                     </div>
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -124,29 +124,34 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pb-20">
                         {images.map((img, index) => {
-                            const isFail = img.status === InspectionStatus.FAIL;
+                            const isFail = img.condition === InspectionStatus.FAIL;
+                            const isPending = img.condition === InspectionStatus.PENDING;
                             const isLast = images.length === index + 1;
                             
+                            const borderClass = isFail ? 'border-red-500 ring-2 ring-red-100' : isPending ? 'border-amber-400 ring-2 ring-amber-50' : 'border-slate-200 dark:border-slate-800';
+                            const badgeClass = isFail ? 'bg-red-500 text-white' : isPending ? 'bg-amber-500 text-white' : 'bg-green-500 text-white';
+                            const iconName = isFail ? 'cancel' : isPending ? 'schedule' : 'check_circle';
+
                             return (
                                 <div
-                                    key={img.id}
+                                    key={img.image_id}
                                     ref={isLast ? lastImageElementRef : null}
                                     onClick={() => setSelectedImage(img)}
-                                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-xl overflow-hidden border ${isFail ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 dark:border-slate-800'} hover:shadow-lg transition-all cursor-pointer`}
+                                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-xl overflow-hidden border ${borderClass} hover:shadow-lg transition-all cursor-pointer`}
                                 >
                                     <div className="relative aspect-[4/3] bg-slate-100 dark:bg-slate-950 overflow-hidden">
-                                        <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: `url(${img.imageUrl})` }}></div>
+                                        <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: `url(${img.local_path || ''})` }}></div>
                                         <div className="absolute top-2 right-2">
-                                            <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm ${isFail ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
-                                                <span className="material-symbols-outlined text-[12px]">{isFail ? 'cancel' : 'check_circle'}</span>
-                                                {img.status}
+                                            <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm ${badgeClass}`}>
+                                                <span className="material-symbols-outlined text-[12px]">{iconName}</span>
+                                                {img.condition}
                                             </span>
                                         </div>
                                     </div>
                                     <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1 text-sm">
                                         <div className="flex justify-between items-center">
-                                            <span className="font-bold text-slate-900 dark:text-white">{img.position}</span>
-                                            <span className="text-[10px] text-slate-400 font-mono">ID: {img.id.split('-')[0]}</span>
+                                            <span className="font-bold text-slate-900 dark:text-white">R{img.row_idx} C{img.col_idx}</span>
+                                            <span className="text-[10px] text-slate-400 font-mono">ID: {img.image_id.split('-')[0]}</span>
                                         </div>
                                     </div>
                                 </div>

@@ -2,29 +2,24 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Table 1: orders
 CREATE TABLE orders (
-    order_number    VARCHAR(50) PRIMARY KEY,
+    m_no    VARCHAR(50) PRIMARY KEY,
     target_quantity INT NOT NULL DEFAULT 0,
     actual_quantity INT NOT NULL DEFAULT 0,
     status          VARCHAR(20) DEFAULT 'ACTIVE',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table 2: board_numbers
-CREATE TABLE board_numbers (
-    board_number    VARCHAR(30) PRIMARY KEY,
-    grid_rows       SMALLINT NOT NULL,
-    grid_cols       SMALLINT NOT NULL,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Table 2 (Removed board_numbers)
 
 -- Table 3: runs
 CREATE TABLE runs (
     run_number      VARCHAR(50) PRIMARY KEY,
     serial_number   VARCHAR(50) NOT NULL,
-    board_number    VARCHAR(30) NOT NULL REFERENCES board_numbers(board_number),
-    order_number    VARCHAR(50) NOT NULL REFERENCES orders(order_number),
+    semi_model      VARCHAR(100),
+    m_no    VARCHAR(50) NOT NULL REFERENCES orders(m_no),
     machine_id      VARCHAR(50),
     status          VARCHAR(20) DEFAULT 'COMPLETED',
+    is_latest       BOOLEAN DEFAULT TRUE,
     start_time      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -54,7 +49,7 @@ CREATE TABLE system_configs (
 
 -- Indexes
 CREATE INDEX idx_runs_serial ON runs(serial_number);
-CREATE INDEX idx_runs_order  ON runs(order_number);
+CREATE INDEX idx_runs_order  ON runs(m_no);
 CREATE INDEX idx_images_run  ON images(run_number);
 
 -- Table 6: run_steps
@@ -113,3 +108,22 @@ CREATE TABLE external_lookup_log (
     raw_response_json JSONB,
     error_message TEXT
 );
+
+-- Trigger for auto-incrementing actual_quantity in orders table
+CREATE OR REPLACE FUNCTION increment_order_quantity()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Only increment when status changes to COMPLETED and it is the latest
+    IF NEW.status = 'COMPLETED' AND NEW.is_latest = TRUE THEN
+        IF OLD.status IS NULL OR OLD.status != 'COMPLETED' THEN
+            UPDATE orders SET actual_quantity = actual_quantity + 1 WHERE m_no = NEW.m_no;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_increment_order_quantity ON runs;
+CREATE TRIGGER trigger_increment_order_quantity
+AFTER INSERT OR UPDATE ON runs
+FOR EACH ROW EXECUTE FUNCTION increment_order_quantity();

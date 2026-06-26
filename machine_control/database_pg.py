@@ -72,9 +72,72 @@ class PostgresDatabase:
     def _ensure_dependencies(self):
         try:
             with self.conn.cursor() as cur:
-                # Basic tables
-                cur.execute("INSERT INTO orders (order_number, target_quantity, status) VALUES (%s, 100, 'ACTIVE') ON CONFLICT DO NOTHING", ("AUTO_ORDER",))
-                cur.execute("INSERT INTO board_numbers (board_number, grid_rows, grid_cols) VALUES (%s, 1, 1) ON CONFLICT DO NOTHING", ("AUTO_BOARD",))
+                # Create orders table if not exists
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    m_no VARCHAR(50) PRIMARY KEY,
+                    target_quantity INT NOT NULL DEFAULT 0,
+                    actual_quantity INT NOT NULL DEFAULT 0,
+                    status VARCHAR(20) DEFAULT 'ACTIVE',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """)
+                # Insert auto_order
+                cur.execute("INSERT INTO orders (m_no, target_quantity, status) VALUES (%s, 100, 'ACTIVE') ON CONFLICT DO NOTHING", ("AUTO_ORDER",))
+
+                # Create runs table if not exists (board_numbers removed)
+                cur.execute("""
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_number VARCHAR(50) PRIMARY KEY,
+                    serial_number VARCHAR(50) NOT NULL,
+                    semi_model VARCHAR(100),
+                    m_no VARCHAR(50) NOT NULL REFERENCES orders(m_no),
+                    machine_id VARCHAR(50),
+                    status VARCHAR(20) DEFAULT 'COMPLETED',
+                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_runs_serial ON runs(serial_number);
+                CREATE INDEX IF NOT EXISTS idx_runs_order ON runs(m_no);
+                """)
+                
+                # Create trigger for actual_quantity
+                cur.execute("""
+                CREATE OR REPLACE FUNCTION increment_actual_quantity()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    IF NEW.status = 'COMPLETED' AND NEW.is_latest = TRUE THEN
+                        IF OLD.status IS NULL OR OLD.status != 'COMPLETED' THEN
+                            UPDATE orders SET actual_quantity = actual_quantity + 1 WHERE m_no = NEW.m_no;
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """)
+                
+                cur.execute("""
+                DROP TRIGGER IF EXISTS trg_increment_actual_quantity ON runs;
+                CREATE TRIGGER trg_increment_actual_quantity
+                AFTER UPDATE OF status ON runs
+                FOR EACH ROW
+                EXECUTE FUNCTION increment_actual_quantity();
+                """)
+
+                # Automatic migration if old schema exists
+                cur.execute("""
+                DO $$
+                BEGIN
+                    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='order_number') THEN
+                        ALTER TABLE orders RENAME COLUMN order_number TO m_no;
+                    END IF;
+                    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='runs' AND column_name='order_number') THEN
+                        ALTER TABLE runs RENAME COLUMN order_number TO m_no;
+                    END IF;
+                END
+                $$;
+                """)
+                self.conn.commit()
                 
                 # Create run_steps table if not exists
                 cur.execute("""
@@ -98,6 +161,13 @@ class PostgresDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_run_steps_run ON run_steps(run_number);
                 """)
+                
+                # Auto migration for runs table to add is_latest
+                try:
+                    cur.execute("ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_latest BOOLEAN DEFAULT TRUE")
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_runs_sn_latest ON runs(serial_number, is_latest)")
+                except Exception as e:
+                    print(f"[DB] Migration notice: {e}")
                 
                 # Create error_log table if not exists
                 cur.execute("""
@@ -144,18 +214,22 @@ class PostgresDatabase:
     def create_run(self, run_info: RunInfo) -> str:
         try:
             with self.conn.cursor() as cur:
-                # pcb_aoi_db uses 'runs' table with: run_number, serial_number, board_number, order_number, machine_id, status, start_time
+                # Ensure the m_no exists in the orders table
+                order_num = run_info.production_work_order or "AUTO_ORDER"
+                cur.execute("INSERT INTO orders (m_no, target_quantity, status) VALUES (%s, 100, 'ACTIVE') ON CONFLICT DO NOTHING", (order_num,))
+                
+                # pcb_aoi_db uses 'runs' table with: run_number, serial_number, semi_model, m_no, machine_id, status, start_time
                 cur.execute(
                     """
-                    INSERT INTO runs (run_number, serial_number, board_number, order_number, machine_id, status)
+                    INSERT INTO runs (run_number, serial_number, semi_model, m_no, machine_id, status)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (run_number) DO NOTHING
                     """,
                     (
                         run_info.run_code,
                         run_info.serial_number,
-                        run_info.board_code or "AUTO_BOARD",
-                        run_info.production_work_order or "AUTO_ORDER",
+                        run_info.semi_model or "AUTO_BOARD",
+                        order_num,
                         run_info.machine_id,
                         "RUNNING"
                     )
@@ -168,15 +242,75 @@ class PostgresDatabase:
         try:
             with self.conn.cursor() as cur:
                 cur.execute("UPDATE runs SET status = %s WHERE run_number = %s", (status, run_code))
+            print(f"[DB] Run {run_code} status updated to {status}")
         except Exception as e:
             print(f"[DB] Error updating run status: {e}")
 
     def finish_run(self, run_code: str, status: str) -> None:
         self.mark_run_status(run_code, status)
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT m_no FROM runs WHERE run_number = %s", (run_code,))
+                row = cur.fetchone()
+                if row:
+                    order_num = row[0]
+                    cur.execute(
+                        """
+                        UPDATE orders
+                        SET actual_quantity = (
+                            SELECT COUNT(*) FROM runs WHERE m_no = %s AND status = 'COMPLETED'
+                        )
+                        WHERE m_no = %s
+                        """,
+                        (order_num, order_num)
+                    )
+        except Exception as e:
+            print(f"[DB] Error updating order actual_quantity: {e}")
+
+    def check_and_invalidate_previous_runs(self, sn: str) -> list[str]:
+        """Finds previous runs of the same SN. Deletes incomplete ones, marks completed ones as not latest. Returns list of deleted run_codes."""
+        deleted_runs = []
+        try:
+            with self.conn.cursor() as cur:
+                # Find all previous runs for this SN
+                cur.execute("SELECT run_number, status FROM runs WHERE serial_number = %s", (sn,))
+                previous_runs = cur.fetchall()
+                
+                for run_tuple in previous_runs:
+                    old_run_code = run_tuple[0]
+                    status = run_tuple[1]
+                    
+                    if status != 'COMPLETED':
+                        # Delete the incomplete run physically and from DB
+                        cur.execute("DELETE FROM runs WHERE run_number = %s", (old_run_code,))
+                        deleted_runs.append(old_run_code)
+                        print(f"[DB] Deleted incomplete run {old_run_code} from database.")
+                    else:
+                        # Mark as not latest
+                        cur.execute("UPDATE runs SET is_latest = FALSE WHERE run_number = %s", (old_run_code,))
+                        print(f"[DB] Marked run {old_run_code} as historical (is_latest=FALSE).")
+        except Exception as e:
+            print(f"[DB] Error invalidating previous runs for SN {sn}: {e}")
+        return deleted_runs
 
     def create_step(self, run_code: str, step_info: StepInfo) -> int:
         # PostgreSQL schema doesn't use run_steps currently
         return step_info.step_index
+
+    def update_system_config(self, key: str, value: str) -> None:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO system_configs (config_name, config_value)
+                    VALUES (%s, %s)
+                    ON CONFLICT (config_name) DO UPDATE SET config_value = EXCLUDED.config_value
+                    """,
+                    (key, value)
+                )
+            self.conn.commit()  # needed since autocommit may not cover DDL in all contexts
+        except Exception as e:
+            print(f"[DB] Error updating system config {key}: {e}")
 
     def update_step_status(self, step_id: int, status: str, step_index: int = None, **fields: Any) -> None:
         try:

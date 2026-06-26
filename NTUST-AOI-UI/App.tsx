@@ -31,34 +31,36 @@ const Sidebar = ({
         const isActive = currentView === view || (view === View.RUN_LIST && [View.RUN_DETAIL, View.RUN_EDIT].includes(currentView));
         return (
             <button
-                onClick={() => onChangeView(view)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg group transition-all duration-300 w-full ${isActive ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                title={isCollapsed ? label : ""}
-            >
-                <span className={`material-symbols-outlined shrink-0 ${isActive ? 'text-primary' : 'text-slate-900 dark:text-slate-300 group-hover:text-primary'}`}>{icon}</span>
-                {!isCollapsed && <p className={`text-sm font-medium leading-normal whitespace-nowrap overflow-hidden transition-all duration-300 ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-900 dark:text-slate-300'}`}>{label}</p>}
-            </button>
+            onClick={() => onChangeView(view)}
+            className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-300 overflow-hidden ${isActive
+                    ? 'bg-primary/10 text-primary dark:bg-primary/20 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                } ${isCollapsed ? 'justify-center w-10 mx-auto' : 'w-full'}`}
+            title={isCollapsed ? label : undefined}
+        >
+            <span className="material-symbols-outlined text-[20px] shrink-0">{icon}</span>
+            <span className={`text-sm whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>{label}</span>
+        </button>
         );
     };
 
     return (
         <aside className={`${isCollapsed ? 'w-20' : 'w-64'} shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between p-4 transition-all duration-300 relative z-20`}>
             <div className="flex flex-col gap-4">
-                <div className="flex gap-3 justify-between items-center mb-6">
-                    <div className="flex gap-3 items-center overflow-hidden">
-                        <div className="bg-center bg-no-repeat bg-cover rounded-full size-10 shrink-0 bg-primary/10 flex items-center justify-center text-primary">
-                            <span className="material-symbols-outlined">center_focus_strong</span>
-                        </div>
-                        {!isCollapsed && (
-                            <div className="flex flex-col overflow-hidden transition-all duration-300">
-                                <h1 className="text-slate-900 dark:text-white text-base font-bold leading-normal truncate">AOI System</h1>
-                                <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal truncate">Line 1 - PCB</p>
+                <div className={`flex items-center mb-6 ${isCollapsed ? 'justify-center' : 'justify-between gap-3'}`}>
+                    {!isCollapsed && (
+                        <div className="flex gap-3 items-center overflow-hidden">
+                            <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-white shrink-0 shadow-sm">
+                                <span className="material-symbols-outlined">center_focus_strong</span>
                             </div>
-                        )}
-                    </div>
+                            <div className="flex flex-col overflow-hidden transition-all duration-300">
+                                <h1 className="text-slate-900 dark:text-white text-base font-bold leading-normal whitespace-nowrap">AOI System</h1>
+                            </div>
+                        </div>
+                    )}
                     <button
                         onClick={onToggle}
-                        className="size-8 hidden md:flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                        className="size-8 hidden md:flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors shrink-0"
                     >
                         <span className="material-symbols-outlined text-[20px]">{isCollapsed ? 'tab_unselected' : 'menu_open'}</span>
                     </button>
@@ -68,15 +70,6 @@ const Sidebar = ({
                     <NavItem view={View.RUN_LIST} icon="dashboard" label="Gallery Dashboard" />
                     <NavItem view={View.SETTINGS} icon="settings" label="Settings" />
                 </nav>
-            </div>
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 mt-auto border-t border-slate-200 dark:border-slate-800 pt-4 overflow-hidden`}>
-                <div className="bg-center bg-no-repeat bg-cover rounded-full size-8 shrink-0" style={{ backgroundImage: `url(${IMAGES.userAvatar})` }}></div>
-                {!isCollapsed && (
-                    <div className="flex flex-col transition-all duration-300 overflow-hidden">
-                        <p className="text-slate-900 dark:text-white text-sm font-medium truncate">Operator 1</p>
-                        <p className="text-slate-500 dark:text-slate-400 text-xs truncate">Logged in</p>
-                    </div>
-                )}
             </div>
         </aside>
     );

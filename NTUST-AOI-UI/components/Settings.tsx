@@ -12,6 +12,16 @@ const CONFIG_LABELS: Record<string, { label: string, description: string, icon: 
         label: 'Cloud Sync Retry',
         description: 'Interval between attempts to re-upload if the network is unstable.',
         icon: 'sync_problem'
+    },
+    'camera_fov_step_mm': {
+        label: 'Camera FOV (Field of View)',
+        description: 'The physical size in mm that the camera captures in one frame.',
+        icon: 'camera'
+    },
+    'camera_margin_mm': {
+        label: 'Camera Scan Margin',
+        description: 'The margin from the edge of the PCB to start scanning (in mm).',
+        icon: 'crop_free'
     }
 };
 
@@ -85,17 +95,25 @@ export const Settings = () => {
     };
 
     const startEditing = (config: SystemConfig) => {
-        const totalSeconds = parseInt(config.config_value) || 0;
-        const unit = getBestUnit(totalSeconds);
-        setEditValue(totalSeconds / unit.value);
-        setEditUnit(unit.value);
+        if (config.unit === 'mm') {
+            setEditValue(parseFloat(config.config_value) || 0);
+            setEditUnit(-1); // Special flag for non-time
+        } else {
+            const totalSeconds = parseInt(config.config_value) || 0;
+            const unit = getBestUnit(totalSeconds);
+            setEditValue(totalSeconds / unit.value);
+            setEditUnit(unit.value);
+        }
         setEditingKey(config.config_name);
     };
 
     const handleSave = async (name: string) => {
         try {
-            const totalSeconds = Math.round(editValue * editUnit);
-            await api.updateConfig(name, totalSeconds.toString());
+            let finalValue = editValue.toString();
+            if (editUnit !== -1) {
+                finalValue = Math.round(editValue * editUnit).toString();
+            }
+            await api.updateConfig(name, finalValue);
             setEditingKey(null);
             fetchConfigs();
         } catch (error) {
@@ -140,8 +158,23 @@ export const Settings = () => {
                     <div className="grid gap-4">
                         {configs.map((config) => {
                             const isEditing = editingKey === config.config_name;
-                            const totalSeconds = parseInt(config.config_value) || 0;
-                            const unit = getBestUnit(totalSeconds);
+                            const isTimeBased = config.unit !== 'mm';
+                            
+                            let displayValue: string | number;
+                            let displayUnitLabel: string;
+                            let unitValue: number;
+
+                            if (isTimeBased) {
+                                const totalSeconds = parseInt(config.config_value) || 0;
+                                const unit = getBestUnit(totalSeconds);
+                                displayValue = totalSeconds / unit.value;
+                                displayUnitLabel = unit.label;
+                                unitValue = unit.value;
+                            } else {
+                                displayValue = parseFloat(config.config_value) || 0;
+                                displayUnitLabel = config.unit || 'mm';
+                                unitValue = -1;
+                            }
                             
                                     const info = CONFIG_LABELS[config.config_name] || {
                                         label: config.config_name.replace(/_/g, ' '),
@@ -179,15 +212,21 @@ export const Settings = () => {
                                                             type="number"
                                                             value={editValue}
                                                             onChange={(e) => setEditValue(parseFloat(e.target.value) || 0)}
-                                                            className="w-20 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none"
+                                                            className="w-24 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none"
                                                         />
-                                                        <select
-                                                            value={editUnit}
-                                                            onChange={(e) => setEditUnit(parseInt(e.target.value))}
-                                                            className="px-2 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none"
-                                                        >
-                                                            {UNITS.map(u => <option key={u.label} value={u.value}>{u.label}</option>)}
-                                                        </select>
+                                                        {isTimeBased ? (
+                                                            <select
+                                                                value={editUnit}
+                                                                onChange={(e) => setEditUnit(parseInt(e.target.value))}
+                                                                className="px-2 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none"
+                                                            >
+                                                                {UNITS.map(u => <option key={u.label} value={u.value}>{u.label}</option>)}
+                                                            </select>
+                                                        ) : (
+                                                            <div className="flex items-center px-3 text-slate-400 font-bold bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                                {displayUnitLabel}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="flex gap-2">
                                                         <button 
@@ -207,8 +246,8 @@ export const Settings = () => {
                                             ) : (
                                                 <div className="flex items-center gap-6">
                                                     <div className="flex flex-col items-end">
-                                                        <span className="text-2xl font-black text-primary">{totalSeconds / unit.value}</span>
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{unit.label}</span>
+                                                        <span className="text-2xl font-black text-primary">{displayValue}</span>
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{displayUnitLabel}</span>
                                                     </div>
                                                     <button 
                                                         onClick={() => startEditing(config)}
