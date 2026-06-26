@@ -1,68 +1,47 @@
 # NTUST AOI — Database Schema Documentation
 
-The system uses **PostgreSQL** as the local database (Local DB) on the AOI machine to manage operations and provide temporary storage before synchronizing data to the long-term archiving system (Long-term Storage).
+The system uses **PostgreSQL** as the local database (Local DB) on the AOI machine to manage operations, coordinate state, and provide temporary storage before synchronizing data.
 
 ---
 
-## Business Logic Analysis (Dual Simultaneous Cameras)
-
-```
-Order (Order Number)
-└── Each physical PCB (Serial Number)
-    └── One inspection cycle (Run Number)
-        └── Generated images from 2 Cameras (Top & Bottom)
-```
-
----
-
-## Table Details
+## 1. Table Details
 
 ### Table 1: `orders` (Order Management)
 
 | Column | Data Type | Description |
 | :--- | :--- | :--- |
-| `order_number` **(PK)** | `VARCHAR(50)` | Unique order ID (e.g., `ORD-20240428-001`). |
+| `m_no` **(PK)** | `VARCHAR(50)` | Unique Manufacturing Order number (e.g., `ORD-20240428-001`). |
 | `target_quantity` | `INT` | Target number of PCBs to produce. |
-| `actual_quantity` | `INT` | Actual number of PCBs inspected (Count from the `runs` table). |
+| `actual_quantity` | `INT` | Actual number of PCBs inspected (Counted dynamically from `runs` where `is_latest = TRUE` and `status != 'PENDING'`). |
 | `status` | `VARCHAR(20)` | Current state (`ACTIVE`, `COMPLETED`, `CANCELLED`). |
-| `created_at` | `TIMESTAMP` | **Timestamp when the order was created in the system.** |
+| `created_at` | `TIMESTAMP` | Timestamp when the order was created. |
 
 ---
 
-### Table 2: `board_numbers` (Board Recipes/Models)
-
-| Column | Data Type | Description |
-| :--- | :--- | :--- |
-| `board_number` **(PK)** | `VARCHAR(30)` | Board model ID (e.g., `BN-5X5`, `BN-7X7`). |
-| `grid_rows` | `SMALLINT` | Number of rows in the inspection grid (sent to PLC). |
-| `grid_cols` | `SMALLINT` | Number of columns in the inspection grid (sent to PLC). |
-| `created_at` | `TIMESTAMP` | Timestamp when the board model was created. |
-
----
-
-### Table 3: `runs` (PCB Inspection Cycles)
+### Table 2: `runs` (PCB Inspection Cycles)
 
 | Column | Data Type | Description |
 | :--- | :--- | :--- |
 | `run_number` **(PK)** | `VARCHAR(50)` | Unique run ID (e.g., `RUN_20240428_114501`). |
 | `serial_number` | `VARCHAR(50)` | Physical PCB Serial Number (S/N). |
-| `board_number` **(FK)** | `VARCHAR(30)` | Reference to the `board_numbers` table. |
-| `order_number` **(FK)** | `VARCHAR(50)` | Reference to the `orders` table. |
+| `semi_model` | `VARCHAR(100)` | Name/identifier of the AI/Inspection recipe model. |
+| `m_no` **(FK)** | `VARCHAR(50)` | Reference to the `orders` table. |
 | `machine_id` | `VARCHAR(50)` | ID of the AOI machine performing the test. |
-| `status` | `VARCHAR(20)` | Run status (`COMPLETED`, `PENDING`). |
+| `status` | `VARCHAR(20)` | Run status (`PENDING`, `COMPLETED`, `PASS`, `FAIL`, `FAILED`). |
+| `is_latest` | `BOOLEAN` | **Crucial:** `TRUE` if this is the most recent run for this S/N. If the S/N is rescanned, old runs are set to `FALSE` (Historical Data). |
 | `start_time` | `TIMESTAMP` | Timestamp when the scan started. |
 | `created_at` | `TIMESTAMP` | Timestamp when the run record was created. |
 
 ---
 
-### Table 4: `images` (Detailed Inspection Images - Dual Cameras)
+### Table 3: `images` (Detailed Inspection Images)
 
 | Column | Data Type | Description |
 | :--- | :--- | :--- |
 | `image_id` **(PK)** | `UUID` | Unique identifier (automatically generated). |
 | `run_number` **(FK)** | `VARCHAR(50)` | Link to the `runs` table. |
 | `side` | `VARCHAR(10)` | Board surface (`Top` or `Bottom`). |
-| `local_path` | `TEXT` | File path on the local AOI machine. Set to NULL after upload. |
+| `local_path` | `TEXT` | File path on the local AOI machine. |
 | `longterm_path` | `TEXT` | File path/URL on the long-term archiving system. |
 | `is_uploaded_longterm` | `BOOLEAN` | Default is `false`. Set to `true` after successful upload. |
 | `row_idx` | `INTEGER` | Row position in the scanning grid. |
@@ -73,67 +52,62 @@ Order (Order Number)
 
 ---
 
-### Table 5: `system_configs` (System Configurations)
+### Table 4: `run_steps` (Step-by-step Execution Log)
 
 | Column | Data Type | Description |
 | :--- | :--- | :--- |
-| **`config_key` (PK)** | `SERIAL` | Auto-incrementing primary key. |
-| `config_name` | `VARCHAR(100)` | Name of the configuration parameter. |
-| `config_value` | `TEXT` | Configured value. |
-| `unit` | `VARCHAR(20)` | Measurement unit (Minutes, Days, %). |
-
-**Key Configuration Parameters:**
-1.  **`local_retention_period`**: Duration images stay on the local machine before archiving (e.g., `30` in `Days`).
-2.  **`sync_retry_interval`**: Time to wait before retrying a failed upload (e.g., `5` in `Minutes`).
+| `step_id` **(PK)**| `SERIAL` | Auto-incrementing step ID. |
+| `run_number` **(FK)**| `VARCHAR(50)` | Link to the `runs` table. |
+| `step_index` | `INT` | The sequence index of the step within the run. |
+| `status` | `VARCHAR(20)` | Status of the step (`PENDING`, `COMPLETED`, `ERROR`). |
+| `start_time` | `TIMESTAMP` | Step start time. |
+| `end_time` | `TIMESTAMP` | Step completion time. |
+| `payload_json` | `JSONB` | Additional step details (e.g., coordinates, configurations). |
 
 ---
 
-## Entity-Relationship Diagram (ERD)
+### Table 5: `system_configs` (System States & Configurations)
+
+| Column | Data Type | Description |
+| :--- | :--- | :--- |
+| `config_name` **(PK)** | `VARCHAR(100)` | Name of the configuration parameter (e.g., `plc_status`, `api_status`). |
+| `config_value` | `TEXT` | Configured value (e.g., `OK`, `ERROR`). |
+| `updated_at` | `TIMESTAMP` | Last time the configuration was updated. |
+
+---
+
+### Additional Logging Tables
+- **`error_log`**: Tracks system and execution errors (`error_id`, `error_code`, `error_message`, `context_json`).
+- **`external_lookup_log`**: Logs interactions with the external Shopfloor/MES system.
+
+---
+
+## 2. Entity-Relationship Diagram (ERD)
 
 ```mermaid
 erDiagram
     orders ||--o{ runs : "contains multiple"
-    board_numbers ||--o{ runs : "defines recipe"
     runs ||--o{ images : "generates"
+    runs ||--o{ run_steps : "executes"
     
     orders {
-        VARCHAR order_number PK
+        VARCHAR m_no PK
         INT target_quantity
         INT actual_quantity
-        TIMESTAMP created_at
-    }
-    board_numbers {
-        VARCHAR board_number PK
-        SMALLINT grid_rows
-        SMALLINT grid_cols
     }
     runs {
         VARCHAR run_number PK
         VARCHAR serial_number
+        BOOLEAN is_latest
+        VARCHAR status
     }
     images {
         UUID image_id PK
         VARCHAR side
-        BOOLEAN is_uploaded_longterm
         TEXT local_path
-        TEXT longterm_path
     }
     system_configs {
-        SERIAL config_key PK
-        VARCHAR config_name
+        VARCHAR config_name PK
         TEXT config_value
     }
 ```
-
----
-
-## Storage Rules & Naming Convention
-
-To ensure system consistency and easy retrieval, the directory structure and file naming follow these rules:
-
-- **Local Storage**: `{local_root}/{order_number}/{serial_number}/{side}/{row}_{col}.jpg`
-- **Long-term Storage**: `{longterm_root}/{order_number}/{serial_number}/{side}/{row}_{col}.jpg`
-
-**Example:**
-- AOI Machine: `D:/Images/ORD-001/SN-999/Top/1_1.jpg`
-- Archive Server: `http://192.168.40.21:9000/archive/ORD-001/SN-999/Top/1_1.jpg`

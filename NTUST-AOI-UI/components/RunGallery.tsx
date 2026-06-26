@@ -81,9 +81,15 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Global Status</p>
                         <div className="flex items-center gap-2">
-                             <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300`}>
-                                <span className="mr-2 size-2 rounded-full bg-green-500"></span>
-                                COMPLETED
+                             <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-bold ${
+                                !detail.is_latest 
+                                    ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                    : detail.status === 'COMPLETED' || detail.status === 'PASS' 
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                             }`}>
+                                <span className={`mr-2 size-2 rounded-full ${!detail.is_latest ? 'bg-slate-400' : detail.status === 'COMPLETED' || detail.status === 'PASS' ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                                {!detail.is_latest ? 'OLD DATA' : detail.status}
                             </span>
                         </div>
                     </div>

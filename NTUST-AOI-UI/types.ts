@@ -30,14 +30,15 @@ export interface BoardNumber {
 }
 
 export interface InspectionRun {
-    run_number: string;
-    serial_number: string;
-    board_number: string;
-    m_no: string;
-    machine_id: string;
-    status: string;
-    start_time: string;
-    created_at: string;
+    id: string;
+    orderId: string;
+    serialNumber: string;
+    status: InspectionStatus;
+    timestamp: string;
+    duration?: string;
+    defectCount?: number;
+    operator?: string;
+    is_latest: boolean;
 }
 
 export interface RunDetail {
@@ -48,6 +49,7 @@ export interface RunDetail {
     status: string;
     start_time: string;
     created_at: string;
+    is_latest: boolean;
     images: CapturedImage[];
 }
 

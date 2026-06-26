@@ -322,6 +322,11 @@ def start_machine_run(req: RunStartRequest):
         raise HTTPException(status_code=500, detail="Database connection failed")
     try:
         with conn.cursor() as cur:
+            # 1. Validation: Prevent new run if machine is currently processing
+            cur.execute("SELECT COUNT(*) FROM runs WHERE status = 'PENDING'")
+            if cur.fetchone()[0] > 0:
+                raise HTTPException(status_code=400, detail="Máy đang quét (Machine is currently processing). Không thể nhập mã mới lúc này!")
+
             # Upsert into system_configs
             cur.execute("""
                 INSERT INTO system_configs (config_name, config_value) 
@@ -376,11 +381,26 @@ def delete_run(run_number: str):
             # 2. Delete the images from DB
             cur.execute("DELETE FROM images WHERE run_number = %s", (run_number,))
             
-            # 3. Delete the run from DB
+            # 3. Fetch m_no before deleting
+            cur.execute("SELECT m_no FROM runs WHERE run_number = %s", (run_number,))
+            run_row = cur.fetchone()
+            m_no = run_row["m_no"] if run_row else None
+
+            # 4. Delete the run from DB
             cur.execute("DELETE FROM runs WHERE run_number = %s", (run_number,))
             
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Run not found")
+                
+            # 5. Update actual_quantity
+            if m_no:
+                cur.execute("""
+                    UPDATE orders
+                    SET actual_quantity = (
+                        SELECT COUNT(*) FROM runs WHERE m_no = %s AND status != 'PENDING' AND is_latest = TRUE
+                    )
+                    WHERE m_no = %s
+                """, (m_no, m_no))
                 
             conn.commit()
             return {"message": f"Run {run_number} and all its images deleted successfully"}
@@ -490,8 +510,10 @@ def get_system_status():
             if run_row:
                 current_order = run_row["m_no"] or "-"
                 active_sn = run_row["serial_number"] or ""
-                # Note: is_processing is managed by frontend via WebSocket events only.
-                # We do not derive it from DB run status here to avoid polling conflicts.
+            # Note: is_processing is now derived from the DB status to survive page reloads.
+            cur.execute("SELECT COUNT(*) FROM runs WHERE status = 'PENDING'")
+            if cur.fetchone()[0] > 0:
+                is_processing = True
                 
             # Get actual quantity for this order
             cur.execute("SELECT actual_quantity FROM orders WHERE m_no = %s", (current_order,))

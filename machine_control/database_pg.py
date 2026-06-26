@@ -101,27 +101,9 @@ class PostgresDatabase:
                 CREATE INDEX IF NOT EXISTS idx_runs_order ON runs(m_no);
                 """)
                 
-                # Create trigger for actual_quantity
-                cur.execute("""
-                CREATE OR REPLACE FUNCTION increment_actual_quantity()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    IF NEW.status = 'COMPLETED' AND NEW.is_latest = TRUE THEN
-                        IF OLD.status IS NULL OR OLD.status != 'COMPLETED' THEN
-                            UPDATE orders SET actual_quantity = actual_quantity + 1 WHERE m_no = NEW.m_no;
-                        END IF;
-                    END IF;
-                    RETURN NEW;
-                END;
-                $$ LANGUAGE plpgsql;
-                """)
-                
+                # Drop trigger for actual_quantity if it exists to avoid conflicts
                 cur.execute("""
                 DROP TRIGGER IF EXISTS trg_increment_actual_quantity ON runs;
-                CREATE TRIGGER trg_increment_actual_quantity
-                AFTER UPDATE OF status ON runs
-                FOR EACH ROW
-                EXECUTE FUNCTION increment_actual_quantity();
                 """)
 
                 # Automatic migration if old schema exists
@@ -258,7 +240,7 @@ class PostgresDatabase:
                         """
                         UPDATE orders
                         SET actual_quantity = (
-                            SELECT COUNT(*) FROM runs WHERE m_no = %s AND status = 'COMPLETED'
+                            SELECT COUNT(*) FROM runs WHERE m_no = %s AND status != 'PENDING' AND is_latest = TRUE
                         )
                         WHERE m_no = %s
                         """,
@@ -280,7 +262,7 @@ class PostgresDatabase:
                     old_run_code = run_tuple[0]
                     status = run_tuple[1]
                     
-                    if status != 'COMPLETED':
+                    if status == 'PENDING':
                         # Delete the incomplete run physically and from DB
                         cur.execute("DELETE FROM runs WHERE run_number = %s", (old_run_code,))
                         deleted_runs.append(old_run_code)

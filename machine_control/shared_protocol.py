@@ -493,6 +493,10 @@ class PcEventMailbox:
         self.pc_sequence = 0
         self.last_plc_sequence_seen = 0
 
+    def ping(self) -> None:
+        """Ping the PLC to check connection health. Raises exception on failure."""
+        self.client.read_words(f"D{PLC_EVENT_BASE}", 1)
+
     def sync_sequence(self) -> None:
         """Read the current PLC sequence to avoid processing old events upon reconnection."""
         try:

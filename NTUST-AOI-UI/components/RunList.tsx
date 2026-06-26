@@ -83,7 +83,16 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
         return () => clearTimeout(timer);
     }, [statusFilter, orderFilter, serialFilter, page, pageSize]);
 
-    const StatusBadge = ({ status }: { status: string }) => {
+    const StatusBadge = ({ status, is_latest = true }: { status: string, is_latest?: boolean }) => {
+        if (!is_latest) {
+            return (
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="mr-1.5 size-1.5 rounded-full bg-slate-400"></span>
+                    OLD DATA
+                </span>
+            );
+        }
+
         const isPass = status === 'COMPLETED' || status === 'PASS';
         const styles = isPass
             ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
@@ -91,7 +100,7 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
         const dot = isPass ? "bg-green-500" : "bg-amber-500";
 
         return (
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${styles}`}>
                 <span className={`mr-1.5 size-1.5 rounded-full ${dot}`}></span>
                 {status}
             </span>
@@ -108,7 +117,7 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                         <div className="flex items-center gap-4">
                             <h1 className="text-2xl md:text-3xl lg:text-4xl font-display font-black leading-tight text-slate-900 dark:text-white">Dashboard</h1>
                             <button
-                                onClick={fetchRuns}
+                                onClick={() => { cache.current.clear(); fetchRuns(); }}
                                 disabled={loading}
                                 className={`size-9 md:size-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-all ${loading ? 'animate-spin' : 'hover:rotate-180'} shadow-sm`}
                             >
@@ -182,7 +191,7 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                         <td className="px-6 py-4 text-sm font-mono text-slate-700 dark:text-slate-300">{run.serial_number}</td>
 
                                         <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{run.m_no}</td>
-                                        <td className="px-6 py-4"><StatusBadge status={run.status} /></td>
+                                        <td className="px-6 py-4"><StatusBadge status={run.status} is_latest={run.is_latest} /></td>
                                         <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
                                             <div className="flex items-center gap-2">
                                                 <div className="size-6 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">IPC</div>
@@ -199,6 +208,7 @@ export const RunList = ({ onViewDetail }: { onViewDetail: (id: string) => void, 
                                                     if(window.confirm(`⚠️ Are you sure you want to PERMANENTLY delete run ${run.run_number} and ALL its associated images?`)) {
                                                         try {
                                                             await inspectionService.deleteRun(run.run_number);
+                                                            cache.current.clear();
                                                             fetchRuns();
                                                         } catch (error) {
                                                             console.error('Error deleting run', error);

@@ -19,6 +19,7 @@ export function OperatorDashboard() {
     const [mode, setMode] = useState<'SCANNER' | 'MANUAL'>('SCANNER');
     const [serialNumber, setSerialNumber] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
 
     // Status indicators
     const [plcStatus, setPlcStatus] = useState<SystemStatus>('IDLE');
@@ -175,7 +176,7 @@ export function OperatorDashboard() {
         let timeoutId: NodeJS.Timeout;
 
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            if (mode !== 'SCANNER') return;
+            if (mode !== 'SCANNER' || isProcessing) return;
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
                 if (e.target !== inputRef.current) return;
             }
@@ -197,13 +198,32 @@ export function OperatorDashboard() {
             window.removeEventListener('keydown', handleGlobalKeyDown);
             clearTimeout(timeoutId);
         };
-    }, [mode]);
+    }, [mode, isProcessing]);
 
     const startRun = async (sn: string) => {
         if (!sn.trim()) return;
+        
+        try {
+            // Pre-flight check: ensure all systems are connected
+            const statusRes = await fetch('http://localhost:8000/system/status');
+            if (statusRes.ok) {
+                const statusData = await statusRes.json();
+                if (statusData.plc === 'ERROR' || statusData.shopfloor === 'ERROR' || statusData.camera === 'ERROR') {
+                    alert("Cannot start inspection: System offline (PLC, Shopfloor, or Camera is disconnected).");
+                    return;
+                }
+            } else {
+                alert("Cannot check system status (API Error).");
+                return;
+            }
+        } catch (e) {
+            alert("Connection error to Backend server!");
+            return;
+        }
+
+        // Only lock UI and clear input after pre-flight passes
         updateProcessing(true);
         setSerialNumber('');
-        await fetchStatus();
 
         try {
             const response = await fetch('http://localhost:8000/runs/start', {
@@ -212,14 +232,17 @@ export function OperatorDashboard() {
                 body: JSON.stringify({ serial_number: sn }),
             });
 
-            if (!response.ok) throw new Error('Failed to start run via API');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Failed to start run via API');
+            }
 
             setSteps(initialSteps.map(s => s.id === 1 ? { ...s, status: 'active' } : s));
             setTimeout(fetchStatus, 1000);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error starting run:", error);
             updateProcessing(false);
-            alert("Failed to start run. Is backend running?");
+            alert(error.message || "Failed to start run. Is backend running?");
         }
     };
 
@@ -267,7 +290,22 @@ export function OperatorDashboard() {
                         </div>
                     </div>
                     <div className="flex flex-col items-start md:items-end w-full md:w-auto">
-                        <h3 className="text-xs lg:text-sm font-bold mb-2 text-slate-500 uppercase tracking-wider hidden md:block">Connection Status</h3>
+                        <div className="flex items-center gap-3 mb-2 w-full md:w-auto justify-between md:justify-end">
+                            <h3 className="text-xs lg:text-sm font-bold text-slate-500 uppercase tracking-wider hidden md:block">Connection Status</h3>
+                            <button 
+                                onClick={async () => {
+                                    setIsReconnecting(true);
+                                    await fetchStatus();
+                                    setTimeout(() => setIsReconnecting(false), 500);
+                                }}
+                                disabled={isReconnecting}
+                                className="flex items-center gap-1 text-xs font-semibold text-white bg-slate-400 hover:bg-slate-500 dark:bg-slate-700 dark:hover:bg-slate-600 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                title="Force reconnect / Refresh status"
+                            >
+                                <span className={`material-symbols-outlined text-[14px] ${isReconnecting ? 'animate-spin' : ''}`}>sync</span>
+                                RECONNECT
+                            </button>
+                        </div>
                         <div className="flex flex-wrap gap-2 lg:gap-4 w-full md:w-auto">
                             <StatusIndicator label="PLC" status={plcStatus} />
                             <StatusIndicator label="Shopfloor" status={apiStatus} />
@@ -310,11 +348,18 @@ export function OperatorDashboard() {
                                             type="text"
                                             value={serialNumber}
                                             readOnly
-                                            placeholder="Waiting for scanner input..."
-                                            className="w-full px-4 py-3 rounded-lg border-2 border-primary/50 bg-primary/5 text-primary focus:outline-none focus:ring-0 placeholder:text-primary/40 font-mono text-lg"
+                                            disabled={isProcessing}
+                                            placeholder={isProcessing ? "Processing... Locked" : "Waiting for scanner..."}
+                                            className={`w-full pl-4 pr-12 py-3 rounded-lg border-2 focus:outline-none focus:ring-0 font-mono text-sm md:text-lg transition-colors truncate
+                                                ${isProcessing 
+                                                    ? "border-slate-300 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500 placeholder:text-slate-400" 
+                                                    : "border-primary/50 bg-primary/5 text-primary placeholder:text-primary/40"}
+                                            `}
                                         />
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 animate-pulse text-primary">
-                                            <span className="material-symbols-outlined">barcode_scanner</span>
+                                        <div className={`absolute right-4 top-1/2 -translate-y-1/2 ${isProcessing ? 'text-slate-400 dark:text-slate-500' : 'animate-pulse text-primary'}`}>
+                                            <span className="material-symbols-outlined">
+                                                {isProcessing ? 'lock' : 'barcode_scanner'}
+                                            </span>
                                         </div>
                                     </div>
                                 ) : (
@@ -323,7 +368,7 @@ export function OperatorDashboard() {
                                         value={serialNumber}
                                         onChange={(e) => setSerialNumber(e.target.value)}
                                         placeholder="Enter S/N manually..."
-                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-primary font-mono text-lg"
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm md:text-lg"
                                         disabled={isProcessing}
                                     />
                                 )}

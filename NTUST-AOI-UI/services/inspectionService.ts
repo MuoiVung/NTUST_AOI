@@ -86,12 +86,13 @@ export const inspectionService = {
             run_number:    run.run_number,
             serial_number: run.serial_number,
             board_number:  run.board_number,
-            m_no:  run.m_no,
-            timestamp:    run.created_at ?? run.start_time ?? '',
-            status:       run.status,
-            machine_id:   run.machine_id,
-            start_time:   run.start_time ?? '',
-            created_at:   run.created_at ?? '',
+            m_no:          run.m_no,
+            timestamp:     run.start_time || run.created_at || '',
+            status:        run.status,
+            machine_id:    run.machine_id,
+            start_time:    run.start_time ?? '',
+            created_at:    run.created_at ?? '',
+            is_latest:     run.is_latest !== false,
         }));
         
         return { data: runs, total: response.total };
@@ -113,6 +114,7 @@ export const inspectionService = {
             status:        runData.status,
             start_time:    runData.start_time ?? '',
             created_at:    runData.created_at ?? '',
+            is_latest:     runData.is_latest !== false,
             images: imagesData.map(img => ({
                 image_id:             img.image_id,
                 run_number:           img.run_number,

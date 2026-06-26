@@ -141,7 +141,14 @@ class PcController:
     def run(self) -> None:
         try:
             while self.state != PcState.SHUTDOWN:
-                self.run_state()
+                try:
+                    self.run_state()
+                except OSError as exc:
+                    print(f"[PC] PLC connection lost during run loop: {exc}")
+                    if self.run_code:
+                        self.mark_run_status(self.run_code, "FAILED")
+                        self.run_code = None
+                    self.enter_error(ErrorCode.ERR_COMM_CONNECT_FAILED, f"PLC disconnected: {exc}")
                 time.sleep(0.02)
         finally:
             self.shutdown_resources()
@@ -204,9 +211,6 @@ class PcController:
                     self.semi_auto_prepared = False
                     self.recipe_downloaded = False
                     self.transition(PcState.SEMI_SELECT)
-                else:
-                    # Just wait
-                    pass
             else:
                 self.transition(PcState.SHUTDOWN)
 
@@ -442,7 +446,18 @@ class PcController:
                 pass
             if self.run_code:
                 self.db.finish_run(self.run_code, "ERROR")
-            self.transition(PcState.SHUTDOWN)
+            
+            # Clean up old sockets/cameras and auto-reconnect
+            try:
+                self.camera_top.stop()
+                self.camera_bottom.stop()
+                self.client.close()
+            except:
+                pass
+            
+            time.sleep(3.0)
+            print("[PC] Auto-reconnecting...")
+            self.transition(PcState.STARTUP)
 
     def prepare_manual_run(self) -> None:
         if self.run_code is not None:
