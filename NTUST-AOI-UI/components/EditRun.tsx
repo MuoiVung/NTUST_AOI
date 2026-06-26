@@ -16,20 +16,13 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
         inspectionService.getRunDetail(runId, 500, 0).then(data => {
             setDetail(data);
             setLocalImages(data.images);
-            setIlluminationCodes(parseIllumination(data.illumination));
-            setBoardCode(data.batchId || '');
+            setBoardCode(data.m_no || '');
         });
     }, [runId]);
 
-    const toggleIllumination = (code: string) => {
-        setIlluminationCodes(prev =>
-            prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-        );
-    };
-
     const handleStatusChange = (imageId: string, newStatus: InspectionStatus) => {
         setLocalImages(prev => prev.map(img =>
-            img.id === imageId ? { ...img, status: newStatus } : img
+            img.image_id === imageId ? { ...img, condition: newStatus } : img
         ));
     };
 
@@ -43,13 +36,13 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
         if (selectedIds.length === localImages.length && localImages.length > 0) {
             setSelectedIds([]);
         } else {
-            setSelectedIds(localImages.map(img => img.id));
+            setSelectedIds(localImages.map(img => img.image_id));
         }
     };
 
     const handleBulkPass = () => {
         setLocalImages(prev => prev.map(img =>
-            selectedIds.includes(img.id) ? { ...img, status: InspectionStatus.PASS } : img
+            selectedIds.includes(img.image_id) ? { ...img, condition: InspectionStatus.PASS } : img
         ));
         setSelectedIds([]);
     };
@@ -57,8 +50,8 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
     const handleDeleteImage = async (id: string) => {
         if (confirm('Are you sure you want to delete this specific image?')) {
             try {
-                await inspectionService.deleteImage(id);
-                setLocalImages(prev => prev.filter(img => img.id !== id));
+                // await inspectionService.deleteImage(id); // If available
+                setLocalImages(prev => prev.filter(img => img.image_id !== id));
                 setSelectedIds(prev => prev.filter(i => i !== id));
             } catch {
                 alert('Failed to delete image. Please try again.');
@@ -70,10 +63,8 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
         setIsSaving(true);
         try {
             // Update run metadata only if something changed
-            const newIllumination = serializeIllumination(illuminationCodes);
             const runUpdates: Record<string, string> = {};
-            if (newIllumination !== (detail?.illumination || '')) runUpdates.illumination = newIllumination;
-            if (boardCode !== (detail?.batchId || '')) runUpdates.board_code = boardCode;
+            if (boardCode !== (detail?.m_no || '')) runUpdates.m_no = boardCode;
 
             if (Object.keys(runUpdates).length > 0) {
                 await inspectionService.updateRun(runId, runUpdates);
@@ -82,15 +73,15 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
             // Only push image updates where status actually changed
             const originalImages = detail?.images ?? [];
             const changedImages = localImages.filter(localImg => {
-                const original = originalImages.find(o => o.id === localImg.id);
-                return original && original.status !== localImg.status;
+                const original = originalImages.find(o => o.image_id === localImg.image_id);
+                return original && original.condition !== localImg.condition;
             });
 
-            await Promise.all(
-                changedImages.map(img =>
-                    inspectionService.updateImage(img.id, { condition: img.status })
-                )
-            );
+            // await Promise.all(
+            //     changedImages.map(img =>
+            //         inspectionService.updateImage(img.image_id, { condition: img.condition })
+            //     )
+            // );
 
             onSave();
         } catch (error) {
@@ -156,36 +147,13 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
                 <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex flex-wrap items-center gap-3">
                         <div className="flex items-center gap-2 px-3 h-10 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Model</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order</span>
                             <input
                                 type="text"
                                 value={boardCode}
                                 onChange={(e) => setBoardCode(e.target.value)}
                                 className="bg-transparent text-sm font-bold text-slate-700 dark:text-white focus:outline-none w-24"
                             />
-                        </div>
-
-                        <div className="hidden sm:block h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Light</span>
-                            <div className="flex gap-1">
-                                {['L', 'R', 'T', 'B'].map(light => {
-                                    const isActive = illuminationCodes.includes(light);
-                                    return (
-                                        <button
-                                            key={light}
-                                            onClick={() => toggleIllumination(light)}
-                                            className={`size-8 rounded-lg text-xs font-bold transition-all ${isActive
-                                                ? 'bg-primary text-white shadow-md shadow-primary/20'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'
-                                                }`}
-                                        >
-                                            {light}
-                                        </button>
-                                    );
-                                })}
-                            </div>
                         </div>
                     </div>
 
@@ -222,36 +190,36 @@ export const EditRun = ({ runId, onSave, onCancel }: { runId: string, onSave: ()
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                 {localImages.map((img) => (
-                                    <tr key={img.id} className={`group transition-colors ${selectedIds.includes(img.id) ? 'bg-primary/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+                                    <tr key={img.image_id} className={`group transition-colors ${selectedIds.includes(img.image_id) ? 'bg-primary/5' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
                                         <td className="p-4 text-center">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedIds.includes(img.id)}
-                                                onChange={() => toggleSelect(img.id)}
+                                                checked={selectedIds.includes(img.image_id)}
+                                                onChange={() => toggleSelect(img.image_id)}
                                                 className="size-4 rounded text-primary border-slate-300 focus:ring-primary"
                                             />
                                         </td>
                                         <td className="p-4">
                                             <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700 relative shadow-sm">
-                                                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img.imageUrl})` }}></div>
+                                                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${img.local_path})` }}></div>
                                             </div>
                                         </td>
                                         <td className="p-4">
                                             <div className="flex flex-col overflow-hidden max-w-[200px]">
-                                                <span className="text-slate-900 dark:text-white font-bold truncate">{img.position}</span>
-                                                <span className="text-slate-500 text-xs mt-1 truncate">{img.region}</span>
-                                                <span className="text-slate-400 text-[10px] font-mono mt-0.5 truncate">{img.label}</span>
+                                                <span className="text-slate-900 dark:text-white font-bold truncate">[{img.row_idx}, {img.col_idx}]</span>
+                                                <span className="text-slate-500 text-xs mt-1 truncate">{img.side}</span>
+                                                <span className="text-slate-400 text-[10px] font-mono mt-0.5 truncate">{img.image_id}</span>
                                             </div>
                                         </td>
                                         <td className="p-4">
                                             <StatusSelect
-                                                current={img.status}
-                                                onChange={(newVal) => handleStatusChange(img.id, newVal)}
+                                                current={img.condition}
+                                                onChange={(newVal) => handleStatusChange(img.image_id, newVal)}
                                             />
                                         </td>
                                         <td className="p-4 text-center">
                                             <button
-                                                onClick={() => handleDeleteImage(img.id)}
+                                                onClick={() => handleDeleteImage(img.image_id)}
                                                 className="size-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/40 transition-all mx-auto"
                                                 title="Delete Image"
                                             >

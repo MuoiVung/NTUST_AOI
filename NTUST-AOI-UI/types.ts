@@ -4,6 +4,13 @@ export enum InspectionStatus {
     PENDING = 'PENDING'
 }
 
+export interface Alert {
+    id: string;
+    message: string;
+    type: 'warning' | 'error' | 'info';
+    timestamp: string;
+}
+
 export interface DashboardMetrics {
     totalScanned: number;
     totalScannedChange: number;
@@ -30,14 +37,15 @@ export interface BoardNumber {
 }
 
 export interface InspectionRun {
-    id: string;
-    orderId: string;
-    serialNumber: string;
-    status: InspectionStatus;
+    run_number: string;
+    serial_number: string;
+    board_number?: string;
+    m_no: string;
+    status: string;
+    machine_id: string;
+    start_time: string;
+    created_at: string;
     timestamp: string;
-    duration?: string;
-    defectCount?: number;
-    operator?: string;
     is_latest: boolean;
 }
 
@@ -54,6 +62,7 @@ export interface RunDetail {
 }
 
 export interface CapturedImage {
+    id?: string;
     image_id: string;
     run_number: string;
     side: 'Top' | 'Bottom';

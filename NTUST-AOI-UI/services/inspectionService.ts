@@ -1,4 +1,4 @@
-import { DashboardMetrics, InspectionRun, RunDetail, InspectionStatus, SystemConfig } from "../types";
+import { DashboardMetrics, InspectionRun, RunDetail, InspectionStatus, SystemConfig, Alert } from "../types";
 import { MOCK_ALERTS, MOCK_METRICS } from "./mockData";
 
 // ─── API Base URLs ────────────────────────────────────────────────────────────
@@ -16,6 +16,7 @@ interface RunApiResponse {
     status: string;
     start_time?: string;
     created_at?: string;
+    is_latest?: boolean;
 }
 
 interface ImageApiResponse {
@@ -134,6 +135,20 @@ export const inspectionService = {
     // Configs
     getConfigs: async (): Promise<SystemConfig[]> => {
         return apiFetch<SystemConfig[]>('/configs/');
+    },
+
+    updateSystemConfig: async (configs: Partial<SystemConfig>): Promise<void> => {
+        // Implementation for updating system config via API
+        throw new Error('updateSystemConfig not fully implemented');
+    },
+
+    updateRun: async (runNumber: string, data: any): Promise<void> => {
+        const response = await fetch(`${getApiBaseUrl()}/runs/${runNumber}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error('Failed to update run');
     },
 
     updateConfig: async (configName: string, configValue: string): Promise<void> => {

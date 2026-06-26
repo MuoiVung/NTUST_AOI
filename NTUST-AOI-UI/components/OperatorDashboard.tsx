@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+// Module-level variable to detect hard reloads vs React route changes (Tab switches)
+let isAppLoaded = false;
+
 type SystemStatus = 'OK' | 'ERROR' | 'IDLE';
 
 interface WorkflowStep {
     id: number;
     label: string;
     status: 'pending' | 'active' | 'completed' | 'error';
+    title?: string;
+    description?: string;
 }
 
 const initialSteps: WorkflowStep[] = [
     { id: 1, label: 'Verify Serial Number', status: 'pending' },
     { id: 2, label: 'Initialize & Calculate Scan Points', status: 'pending' },
     { id: 3, label: 'Scanning PCB', status: 'pending' },
-    { id: 4, label: 'Save Results', status: 'pending' },
+    { id: 4, label: 'Save Results', status: 'pending', title: "Deep Learning AI", description: "Analyzing images for defects" },
 ];
 
 export function OperatorDashboard() {
@@ -53,17 +58,47 @@ export function OperatorDashboard() {
                 setPlcStatus(data.plc as SystemStatus);
                 setApiStatus(data.shopfloor as SystemStatus);
                 setCameraStatus(data.camera as SystemStatus);
-                if (data.current_order) setCurrentOrder(data.current_order);
-                if (data.actual_quantity !== undefined) setActualQuantity(data.actual_quantity);
-                if (data.active_sn) setActiveSn(data.active_sn);
-
-                // isProcessing is managed only by WebSocket events (RUN_COMPLETE, PC_IDLE, etc.)
-                // fetchStatus() does NOT touch isProcessing to avoid polling conflicts.
-
+                // isProcessing is managed primarily by WebSocket events
                 if (!hasInitialized) {
                     setHasInitialized(true);
-                    if (!data.is_processing && data.active_sn) {
-                        setSteps(initialSteps.map(s => ({ ...s, status: 'completed' })));
+
+                    // New session if the module was just loaded into memory (F5 or New Tab)
+                    const isNewSession = !isAppLoaded;
+                    isAppLoaded = true;
+
+                    if (data.is_processing) {
+                        // Case 3: Resuming an ongoing run
+                        if (data.current_order) setCurrentOrder(data.current_order);
+                        if (data.actual_quantity !== undefined) setActualQuantity(data.actual_quantity);
+                        if (data.active_sn) setActiveSn(data.active_sn);
+                        updateProcessing(true);
+                        setSteps(initialSteps.map((s, i) => i === 0 ? { ...s, status: 'active' } : s));
+                    } else {
+                        // Not processing
+                        if (isNewSession) {
+                            // Case 1: Fresh browser tab or F5 -> Blank Slate
+                            setCurrentOrder('-');
+                            setActualQuantity(0);
+                            setActiveSn('');
+                            setSteps([...initialSteps]);
+                        } else {
+                            // Case 2: Navigating back from another tab (Gallery) -> Keep context
+                            if (data.current_order) setCurrentOrder(data.current_order);
+                            if (data.actual_quantity !== undefined) setActualQuantity(data.actual_quantity);
+                            // Set completed only if we actually had a previous run
+                            if (data.active_sn) {
+                                setActiveSn(data.active_sn);
+                                setSteps(initialSteps.map(s => ({ ...s, status: 'completed' })));
+                            }
+                        }
+                    }
+                } else {
+                    // Ongoing polling update
+                    if (data.current_order) setCurrentOrder(data.current_order);
+                    if (data.actual_quantity !== undefined) setActualQuantity(data.actual_quantity);
+                    // Update activeSn during processing
+                    if (data.is_processing && data.active_sn) {
+                        setActiveSn(data.active_sn);
                     }
                 }
             } else {
@@ -123,6 +158,7 @@ export function OperatorDashboard() {
                         if (state === "PC_IDLE") {
                             updateProcessing(false);
                             activeStepId = 5; // Completes steps 1-4
+                            fetchStatus(); // Immediately refresh to get updated actual_quantity
                         }
 
                         if (data.type === 'step_status' && data.step_index !== undefined) {
@@ -224,20 +260,29 @@ export function OperatorDashboard() {
         // Only lock UI and clear input after pre-flight passes
         updateProcessing(true);
         setSerialNumber('');
+        setActiveSn(sn); // Immediately display the active SN on UI
+        setSteps(initialSteps.map((s, i) => i === 0 ? { ...s, status: 'active' } : s));
 
         try {
             const response = await fetch('http://localhost:8000/runs/start', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({ serial_number: sn }),
             });
-
+            const data = await response.json();
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || 'Failed to start run via API');
+                alert(`Error starting run: ${data.detail || response.statusText}`);
+                updateProcessing(false);
+                setSteps(initialSteps);
+                return;
             }
+            
+            if (data.m_no) setCurrentOrder(data.m_no);
+            if (data.actual_quantity !== undefined) setActualQuantity(data.actual_quantity);
 
-            setSteps(initialSteps.map(s => s.id === 1 ? { ...s, status: 'active' } : s));
+            // Fetch latest status right after queueing to get updated states
             setTimeout(fetchStatus, 1000);
         } catch (error: any) {
             console.error("Error starting run:", error);

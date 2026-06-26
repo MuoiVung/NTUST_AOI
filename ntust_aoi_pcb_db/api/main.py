@@ -174,6 +174,7 @@ def get_runs(
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             base_query = " FROM runs WHERE 1=1"
             params: list = []
             if board_number:
@@ -220,6 +221,7 @@ def get_run(run_number: str):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             cur.execute("SELECT * FROM runs WHERE run_number = %s", (run_number,))
             row = cur.fetchone()
             if not row:
@@ -238,6 +240,7 @@ def get_images(run_number: str, limit: int = 50, offset: int = 0):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             cur.execute(
                 "SELECT * FROM images WHERE run_number = %s ORDER BY side, row_idx, col_idx LIMIT %s OFFSET %s",
                 (run_number, limit, offset),
@@ -323,7 +326,7 @@ def start_machine_run(req: RunStartRequest):
     try:
         with conn.cursor() as cur:
             # 1. Validation: Prevent new run if machine is currently processing
-            cur.execute("SELECT COUNT(*) FROM runs WHERE status = 'PENDING'")
+            cur.execute("SELECT COUNT(*) FROM runs WHERE status IN ('PENDING', 'RUNNING')")
             if cur.fetchone()[0] > 0:
                 raise HTTPException(status_code=400, detail="Máy đang quét (Machine is currently processing). Không thể nhập mã mới lúc này!")
 
@@ -334,23 +337,59 @@ def start_machine_run(req: RunStartRequest):
                 ON CONFLICT (config_name) DO UPDATE SET config_value = EXCLUDED.config_value
             """, (req.serial_number,))
             
+            # Try to lookup from Shopfloor API synchronously for UI immediate feedback
+            import urllib.request
+            import urllib.parse
+            import json
+            m_no = "-"
+            actual_qty = 0
+            try:
+                # The mock shopfloor API is at 9090
+                query = urllib.parse.urlencode({"sn": req.serial_number})
+                url = f"http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx?{query}"
+                req_api = urllib.request.Request(url)
+                with urllib.request.urlopen(req_api, timeout=1.5) as response:
+                    if response.status == 200:
+                        data = json.loads(response.read().decode())
+                        if data.get("HasData") == "1" or data.get("M_NO"):
+                            m_no = data.get("M_NO") or "-"
+            except Exception as e:
+                print(f"Warning: Synchronous API lookup failed in start_run: {e}")
+
+            # Get actual quantity for this order
+            if m_no != "-":
+                cur.execute("SELECT actual_quantity FROM orders WHERE m_no = %s", (m_no,))
+                ord_row = cur.fetchone()
+                if ord_row:
+                    actual_qty = ord_row[0]  # Tuple cursor
+            else:
+                cur.execute("SELECT COUNT(*) FROM runs WHERE (m_no IS NULL OR m_no = '' OR m_no = '-') AND status NOT IN ('PENDING', 'RUNNING') AND is_latest = TRUE")
+                actual_qty = cur.fetchone()[0]
+
             # Send asynchronous notification to PC Controller
             # Using psycopg2's NOTIFY functionality
             cur.execute(f"NOTIFY new_run_sn, '{req.serial_number}';")
             
             conn.commit()
-            return {"status": "success", "message": f"Run queued for {req.serial_number}"}
+            return {
+                "status": "success", 
+                "message": f"Run queued for {req.serial_number}",
+                "m_no": m_no,
+                "actual_quantity": actual_qty
+            }
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        conn.close()
+        if conn:
+            release_db_connection(conn)
 
 @app.delete("/runs/{run_number}")
 def delete_run(run_number: str):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             # 1. Fetch all images for this run to delete physical files
             cur.execute("SELECT local_path, longterm_path, is_uploaded_longterm FROM images WHERE run_number = %s", (run_number,))
             images = cur.fetchall()
@@ -381,10 +420,26 @@ def delete_run(run_number: str):
             # 2. Delete the images from DB
             cur.execute("DELETE FROM images WHERE run_number = %s", (run_number,))
             
-            # 3. Fetch m_no before deleting
-            cur.execute("SELECT m_no FROM runs WHERE run_number = %s", (run_number,))
+            # 3. Fetch m_no and sn before deleting
+            cur.execute("SELECT m_no, serial_number FROM runs WHERE run_number = %s", (run_number,))
             run_row = cur.fetchone()
             m_no = run_row["m_no"] if run_row else None
+            sn = run_row["serial_number"] if run_row else None
+
+            # 3.5 Delete physical run directory and parent SN directory if empty
+            if m_no and sn:
+                import shutil
+                run_dir = os.path.join(IMAGE_WATCH_DIR, m_no, sn, run_number)
+                if os.path.exists(run_dir):
+                    shutil.rmtree(run_dir, ignore_errors=True)
+                
+                sn_dir = os.path.join(IMAGE_WATCH_DIR, m_no, sn)
+                if os.path.exists(sn_dir):
+                    try:
+                        if not os.listdir(sn_dir):
+                            os.rmdir(sn_dir)
+                    except Exception as e:
+                        print(f"Warning: Failed to remove SN directory {sn_dir}: {e}")
 
             # 4. Delete the run from DB
             cur.execute("DELETE FROM runs WHERE run_number = %s", (run_number,))
@@ -413,6 +468,7 @@ def proxy_image(image_id: str):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             cur.execute("SELECT local_path, longterm_path, is_uploaded_longterm FROM images WHERE image_id = %s", (image_id,))
             row = cur.fetchone()
             if not row:
@@ -474,6 +530,7 @@ def get_system_status():
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             cur.execute("SELECT config_value FROM system_configs WHERE config_name = 'plc_status'")
             row = cur.fetchone()
             if row and row["config_value"]:
@@ -504,6 +561,9 @@ def get_system_status():
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Force a fresh transaction snapshot
+            conn.commit()
+            
             # Get latest run info
             cur.execute("SELECT m_no, serial_number, status FROM runs ORDER BY start_time DESC LIMIT 1")
             run_row = cur.fetchone()
@@ -511,15 +571,20 @@ def get_system_status():
                 current_order = run_row["m_no"] or "-"
                 active_sn = run_row["serial_number"] or ""
             # Note: is_processing is now derived from the DB status to survive page reloads.
-            cur.execute("SELECT COUNT(*) FROM runs WHERE status = 'PENDING'")
-            if cur.fetchone()[0] > 0:
+            cur.execute("SELECT COUNT(*) as count FROM runs WHERE status IN ('PENDING', 'RUNNING')")
+            if cur.fetchone()["count"] > 0:
                 is_processing = True
                 
             # Get actual quantity for this order
-            cur.execute("SELECT actual_quantity FROM orders WHERE m_no = %s", (current_order,))
-            ord_row = cur.fetchone()
-            if ord_row:
-                actual_quantity = ord_row["actual_quantity"]
+            if current_order and current_order != "-":
+                cur.execute("SELECT actual_quantity FROM orders WHERE m_no = %s", (current_order,))
+                ord_row = cur.fetchone()
+                if ord_row:
+                    actual_quantity = ord_row["actual_quantity"]
+            else:
+                # If there's no specific order, just count completed runs that have no order
+                cur.execute("SELECT COUNT(*) as count FROM runs WHERE (m_no IS NULL OR m_no = '' OR m_no = '-') AND status NOT IN ('PENDING', 'RUNNING') AND is_latest = TRUE")
+                actual_quantity = cur.fetchone()["count"]
     except Exception as e:
         print(f"Error in /system/status DB query: {e}")
         pass
@@ -543,6 +608,7 @@ def get_configs():
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn.commit()
             cur.execute("SELECT * FROM system_configs WHERE config_name NOT IN ('pending_run_sn', 'plc_status') ORDER BY config_key")
             return [dict(r) for r in cur.fetchall()]
     finally:

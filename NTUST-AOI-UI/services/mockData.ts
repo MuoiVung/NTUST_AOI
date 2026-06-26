@@ -13,20 +13,20 @@ export const IMAGES = {
 };
 
 export const MOCK_ALERTS: Alert[] = [
-    { id: '1', code: '#4022', type: 'Misaligned', time: '10:42 AM', lane: 'Lane 2', severity: 'critical' },
-    { id: '2', code: '#4021', type: 'Solder Bridge', time: '10:38 AM', lane: 'Lane 1', severity: 'warning' },
-    { id: '3', code: '#4018', type: 'Missing Part', time: '10:15 AM', lane: 'Lane 1', severity: 'critical' },
-    { id: '4', code: '#4015', type: 'Flux Residue', time: '09:55 AM', lane: 'Lane 3', severity: 'info' },
-    { id: '5', code: '#4009', type: 'Tombstone', time: '09:30 AM', lane: 'Lane 2', severity: 'critical' },
+    { id: '1', message: '#4022 Misaligned', type: 'error', timestamp: '10:42 AM' },
+    { id: '2', message: '#4021 Solder Bridge', type: 'warning', timestamp: '10:38 AM' },
+    { id: '3', message: '#4018 Missing Part', type: 'error', timestamp: '10:15 AM' },
+    { id: '4', message: '#4015 Flux Residue', type: 'info', timestamp: '09:55 AM' },
+    { id: '5', message: '#4009 Tombstone', type: 'error', timestamp: '09:30 AM' },
 ];
 
 export const MOCK_RUNS: InspectionRun[] = [
-    { id: 'RUN-2023-001', timestamp: '2023-10-27 08:30:12', pcbSerial: 'SN-99887766', result: InspectionStatus.PASS, operator: 'Op-12' },
-    { id: 'RUN-2023-002', timestamp: '2023-10-27 08:35:45', pcbSerial: 'SN-99887767', result: InspectionStatus.FAIL, defectType: 'Solder Bridge', operator: 'Op-12' },
-    { id: 'RUN-2023-003', timestamp: '2023-10-27 08:42:01', pcbSerial: 'SN-99887768', result: InspectionStatus.PASS, operator: 'Op-14' },
-    { id: 'RUN-2023-004', timestamp: '2023-10-27 08:48:33', pcbSerial: 'SN-99887769', result: InspectionStatus.FAIL, defectType: 'Missing Component', operator: 'Op-14' },
-    { id: 'RUN-2023-005', timestamp: '2023-10-27 08:55:10', pcbSerial: 'SN-99887770', result: InspectionStatus.PASS, operator: 'Op-12' },
-    { id: 'RUN-2023-006', timestamp: '2023-10-27 09:10:22', pcbSerial: 'SN-99887772', result: InspectionStatus.FAIL, defectType: 'Misaligned', operator: 'Op-15' },
+    { run_number: 'RUN-2023-001', timestamp: '2023-10-27 08:30:12', created_at: '2023-10-27 08:30:12', start_time: '2023-10-27 08:30:12', serial_number: 'SN-99887766', status: InspectionStatus.PASS, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
+    { run_number: 'RUN-2023-002', timestamp: '2023-10-27 08:35:45', created_at: '2023-10-27 08:35:45', start_time: '2023-10-27 08:35:45', serial_number: 'SN-99887767', status: InspectionStatus.FAIL, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
+    { run_number: 'RUN-2023-003', timestamp: '2023-10-27 08:42:01', created_at: '2023-10-27 08:42:01', start_time: '2023-10-27 08:42:01', serial_number: 'SN-99887768', status: InspectionStatus.PASS, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
+    { run_number: 'RUN-2023-004', timestamp: '2023-10-27 08:48:33', created_at: '2023-10-27 08:48:33', start_time: '2023-10-27 08:48:33', serial_number: 'SN-99887769', status: InspectionStatus.FAIL, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
+    { run_number: 'RUN-2023-005', timestamp: '2023-10-27 08:55:10', created_at: '2023-10-27 08:55:10', start_time: '2023-10-27 08:55:10', serial_number: 'SN-99887770', status: InspectionStatus.PASS, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
+    { run_number: 'RUN-2023-006', timestamp: '2023-10-27 09:10:22', created_at: '2023-10-27 09:10:22', start_time: '2023-10-27 09:10:22', serial_number: 'SN-99887772', status: InspectionStatus.FAIL, m_no: 'MO-001', machine_id: 'MAC-1', is_latest: true },
 ];
 
 export const MOCK_METRICS: DashboardMetrics = {
@@ -53,23 +53,23 @@ export const MOCK_METRICS: DashboardMetrics = {
 };
 
 export const MOCK_RUN_DETAIL: RunDetail = {
-    runId: 'RUN #8392-A',
-    batchId: 'Batch 402',
-    line: 'Line 3',
-    startTime: 'Oct 27, 08:00',
-    endTime: 'Oct 27, 12:30',
-    totalBoards: 500,
-    defectRate: 1.2,
-    operator: 'J. Smith',
+    run_number: 'RUN #8392-A',
+    m_no: 'MO-TEST',
+    serial_number: 'SN-TEST',
+    machine_id: 'MAC-1',
+    start_time: 'Oct 27, 08:00',
+    created_at: 'Oct 27, 08:00',
+    status: InspectionStatus.PASS,
+    is_latest: true,
     images: [
-        { id: '1', position: 'A-01', status: InspectionStatus.PASS, imageUrl: IMAGES.chip1, region: 'Region A-1' },
-        { id: '2', position: 'A-02', status: InspectionStatus.PASS, imageUrl: IMAGES.chip2, region: 'Region A-2' },
-        { id: '3', position: 'A-03', status: InspectionStatus.FAIL, label: 'Missing Component', imageUrl: IMAGES.chipDefect, region: 'Region A-3' },
-        { id: '4', position: 'B-01', status: InspectionStatus.PASS, imageUrl: IMAGES.chip1, region: 'Region B-1' },
-        { id: '5', position: 'B-02', status: InspectionStatus.PASS, imageUrl: IMAGES.chip2, region: 'Region B-2' },
-        { id: '6', position: 'B-03', status: InspectionStatus.FAIL, label: 'Misalignment Detected', imageUrl: IMAGES.chipMisalign, region: 'Region B-3' },
-        { id: '7', position: 'C-01', status: InspectionStatus.PASS, imageUrl: IMAGES.chipGreen, region: 'Region C-1' },
-        { id: '8', position: 'C-02', status: InspectionStatus.PASS, imageUrl: IMAGES.chipBlack, region: 'Region C-2' },
-        { id: '9', position: 'D-01', status: InspectionStatus.FAIL, label: 'Capacitor Lift', imageUrl: IMAGES.chip2, region: 'Region D-1' },
+        { image_id: '1', run_number: 'R1', side: 'Top', local_path: IMAGES.chip1, longterm_path: null, is_uploaded_longterm: false, row_idx: 0, col_idx: 0, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '2', run_number: 'R1', side: 'Top', local_path: IMAGES.chip2, longterm_path: null, is_uploaded_longterm: false, row_idx: 0, col_idx: 1, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '3', run_number: 'R1', side: 'Top', local_path: IMAGES.chipDefect, longterm_path: null, is_uploaded_longterm: false, row_idx: 0, col_idx: 2, condition: InspectionStatus.FAIL, file_size_bytes: 100, capture_time: '' },
+        { image_id: '4', run_number: 'R1', side: 'Top', local_path: IMAGES.chip1, longterm_path: null, is_uploaded_longterm: false, row_idx: 1, col_idx: 0, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '5', run_number: 'R1', side: 'Top', local_path: IMAGES.chip2, longterm_path: null, is_uploaded_longterm: false, row_idx: 1, col_idx: 1, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '6', run_number: 'R1', side: 'Top', local_path: IMAGES.chipMisalign, longterm_path: null, is_uploaded_longterm: false, row_idx: 1, col_idx: 2, condition: InspectionStatus.FAIL, file_size_bytes: 100, capture_time: '' },
+        { image_id: '7', run_number: 'R1', side: 'Top', local_path: IMAGES.chipGreen, longterm_path: null, is_uploaded_longterm: false, row_idx: 2, col_idx: 0, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '8', run_number: 'R1', side: 'Top', local_path: IMAGES.chipBlack, longterm_path: null, is_uploaded_longterm: false, row_idx: 2, col_idx: 1, condition: InspectionStatus.PASS, file_size_bytes: 100, capture_time: '' },
+        { image_id: '9', run_number: 'R1', side: 'Top', local_path: IMAGES.chip2, longterm_path: null, is_uploaded_longterm: false, row_idx: 2, col_idx: 2, condition: InspectionStatus.FAIL, file_size_bytes: 100, capture_time: '' },
     ]
 };
