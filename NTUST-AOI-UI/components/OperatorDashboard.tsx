@@ -25,6 +25,7 @@ export function OperatorDashboard() {
     const [serialNumber, setSerialNumber] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
+    const [systemError, setSystemError] = useState<string | null>(null);
 
     // Status indicators
     const [plcStatus, setPlcStatus] = useState<SystemStatus>('IDLE');
@@ -38,6 +39,7 @@ export function OperatorDashboard() {
 
     const inputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
+    const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const [steps, setSteps] = useState<WorkflowStep[]>(initialSteps);
     const [totalPoints, setTotalPoints] = useState<number>(0);
@@ -174,7 +176,18 @@ export function OperatorDashboard() {
                         }
                     } else if (data.type === 'error') {
                         setSteps(prev => prev.map(s => s.status === 'active' ? { ...s, status: 'error' } : s));
-                        alert(`System Error: ${data.error_message}`);
+                        
+                        let displayError = data.error_message || "Unknown error occurred";
+                        if (displayError.includes("Errno 61") || displayError.toLowerCase().includes("connection refused")) {
+                            displayError = "Hardware Connection Failed: Cannot reach PLC or Camera. Please verify device power and network cables.";
+                        }
+                        
+                        setSystemError(`System Alert: ${displayError}`);
+                        // Auto-clear error after 5 seconds to prevent stale messages
+                        if (errorTimeoutRef.current) {
+                            clearTimeout(errorTimeoutRef.current);
+                        }
+                        errorTimeoutRef.current = setTimeout(() => setSystemError(null), 5000);
                         updateProcessing(false);
                         fetchStatus();
                     }
@@ -197,6 +210,7 @@ export function OperatorDashboard() {
         return () => {
             alive = false;
             clearTimeout(reconnectTimer);
+            if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
             ws?.close();
         };
     }, [fetchStatus, updateProcessing]);
@@ -315,6 +329,17 @@ export function OperatorDashboard() {
 
     return (
         <div className="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-[#0d1117] p-4 lg:p-6">
+                {/* Non-blocking Error Banner */}
+                {systemError && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/50 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl flex items-center gap-3">
+                        <span className="material-symbols-outlined">error</span>
+                        <span className="font-semibold text-sm">{systemError}</span>
+                        <button onClick={() => setSystemError(null)} className="ml-auto hover:bg-red-500/20 p-1 rounded-full transition-colors">
+                            <span className="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                )}
+                
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 lg:mb-8 gap-4">
                     <div>
                         <h1 className="text-xl lg:text-2xl font-bold text-slate-900 dark:text-white">Operator Dashboard</h1>

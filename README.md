@@ -4,6 +4,16 @@ Welcome to the **NTUST Automated Optical Inspection (AOI)** platform. This repos
 
 ---
 
+## 🚀 Recent Updates
+- **Integrated** the database system with the PLC-PC control interface.
+- **Integrated** the database system with the Shopfloor (MES) interface.
+- **Tested** the end-to-end system using PLC and Shopfloor simulation modules.
+- **Added** a new dashboard interface to monitor active work orders and the real-time statuses of the PLC, Shopfloor API, and Camera.
+- **Added** a new interface for scanning Serial Numbers (S/N) and supporting manual input modes.
+- **Updated** project documentation (Workflows and Database schemas).
+
+---
+
 ## 🚀 Quick Start Guide (Testing via Simulation)
 
 If you just want to run the system on your personal computer without any physical industrial hardware, you can use our built-in simulation tools.
