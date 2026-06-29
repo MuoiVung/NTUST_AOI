@@ -1,198 +1,157 @@
-# 🔬 NTUST AOI System
+# 🔬 NTUST Automated Optical Inspection (AOI) System
 
-Welcome to the **NTUST Automated Optical Inspection (AOI)** platform. This repository contains a complete industrial solution for PCB inspection, bridging physical PLCs, dual-camera arrays, a robust PostgreSQL database engine, and a modern React-based HMI dashboard.
-
----
-
-## 🚀 Recent Updates
-- **Integrated** the database system with the PLC-PC control interface.
-- **Integrated** the database system with the Shopfloor (MES) interface.
-- **Tested** the end-to-end system using PLC and Shopfloor simulation modules.
-- **Added** a new dashboard interface to monitor active work orders and the real-time statuses of the PLC, Shopfloor API, and Camera.
-- **Added** a new interface for scanning Serial Numbers (S/N) and supporting manual input modes.
-- **Updated** project documentation (Workflows and Database schemas).
+Welcome to the **NTUST AOI** platform. This repository contains an end-to-end industrial solution for PCB inspection. It successfully bridges physical hardware (Mitsubishi FX5U PLCs and dual-camera arrays) with a modern software stack (FastAPI, PostgreSQL, and a real-time React Dashboard).
 
 ---
 
-## 🚀 Quick Start Guide (Testing via Simulation)
+## 🌟 Overview
 
-If you just want to run the system on your personal computer without any physical industrial hardware, you can use our built-in simulation tools.
+The AOI system is designed to automate the quality assurance process on the factory floor. By integrating directly with the factory's Manufacturing Execution System (MES), the system verifies Serial Numbers (S/N) in real-time, calculates dynamic inspection paths based on board dimensions, commands the PLC to move the XY-table, and captures high-resolution Top/Bottom images at precise coordinates.
 
-### Prerequisites
-1. **Python 3.10+**: Make sure Python is installed.
-2. **Node.js 18+**: Required for the frontend dashboard.
-3. **Docker Desktop**: Must be running to host the PostgreSQL database.
+## ⚡ Core Features
 
-### Step 1: Installation
-1. Clone this repository to your local machine.
-2. Open a terminal in the root directory.
-3. Install the Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Install the Frontend dependencies:
-   ```bash
-   cd NTUST-AOI-UI
-   npm install
-   cd ..
-   ```
-
-### Step 2: Start the System Core (Launcher)
-The AOI system uses a Desktop Launcher to manage all background services (Database, Backend API, Frontend UI, and PC Controller).
-1. Ensure **Docker Desktop** is open and running.
-2. Run the launcher script:
-   ```bash
-   python launcher.py
-   ```
-3. A desktop GUI will appear. Click the **"Start All"** button. This will automatically:
-   - Spin up the PostgreSQL Docker container.
-   - Start the FastAPI backend server (`http://localhost:8000`).
-   - Start the Vite React Frontend (`http://localhost:3001`).
-   - Start the `pc_controller.py` service.
-
-### Step 3: Start the Hardware Simulators
-Open a *new* terminal window, navigate to the simulation folder, and start the PLC simulator. This script mocks a Mitsubishi SLMP PLC.
-```bash
-cd simulation
-python plc_sim.py
-```
-*(Note: The camera is automatically simulated by `pc_controller.py` if no real camera SDK is found).*
-
-### Step 4: Add Mock Images (Optional but Recommended)
-The simulated camera (`pc_controller.py`) tries to pull realistic images during the scan. 
-1. Create a folder named `mock_images` in the root directory.
-2. Place a few `.jpg` or `.png` PCB images inside it.
-3. During the simulated run, the system will randomly pick images from `mock_images` and save them as the "scanned" results. If the folder is empty, it will generate fake empty files instead.
-
-### Step 5: Access the Dashboard & Run
-Open your web browser and go to: **http://localhost:3001**
-
-You are now running the full AOI system in simulation mode. Input a Serial Number to start!
+- **Direct API Image Injection:** Images are captured by the hardware controller and POSTed directly to the FastAPI backend, eliminating reliance on brittle file-watcher mechanisms.
+- **Real-Time UI Updates:** PostgreSQL `NOTIFY` triggers and WebSockets push new inspection images instantly to the React frontend.
+- **Industrial PLC Integration:** Communicates with Mitsubishi PLCs using the robust SLMP (Seamless Message Protocol) with guaranteed event acknowledgments to prevent timeouts.
+- **Factory MES Sync:** Pulls board dimensions and manufacturing orders dynamically.
+- **Headless & GUI Modes:** Can be run via a PySide6 Desktop GUI or entirely headless for CI/CD and automated server environments.
 
 ---
 
-## 🔄 Simulation Data Flow & Sequence Diagram
+## 🔄 System Architecture & Workflow
 
-When running in simulation mode, the data generation and storage follow a specific pipeline to mimic the real hardware.
-
-**Folder Structure Generation:**
-When a scan completes a point, the simulated camera saves the image to the local "Watch Directory" following this structure:
-`watch_dir/{Manufacturing_Order}/{Serial_Number}/{Run_Code}/{Top_or_Bottom}/{run_code}_{side}_r{row}_c{col}.jpg`
+The system relies on strict state synchronization between the PC Controller, the Database, and the Machine (PLC).
 
 ```mermaid
 sequenceDiagram
-    participant UI as Web Dashboard
-    participant API as Backend API
-    participant PC as Simulated PC Controller
-    participant FS as Local File System (watch_dir)
-    
-    UI->>API: Submits SN to start scan
-    API->>API: Creates DB Record (PENDING)
-    API->>PC: Broadcasts "Start Scan"
-    
-    loop Every Grid Point
-        PC->>PC: Simulates machine movement
-        PC->>FS: Reads a random image from /mock_images/
-        PC->>FS: Saves to /watch_dir/.../{row}_{col}.jpg
-        PC->>API: Saves scan point data to DB
+    participant Operator as Operator
+    participant DB as Dashboard & Database
+    participant PC as Main Computer (PC)
+    participant Camera as Cameras
+    participant MES as Factory System
+    participant Machine as The Machine (PLC)
+
+    %% Phase 1: Initialization
+    Note over Operator,Machine: Phase 1: Initialization & Handshake
+    PC->>Machine: Establish network connection
+    PC->>DB: Update machine status to Connected
+    PC->>Machine: Send system ready signal
+    Machine-->>PC: Acknowledge signal
+    Machine->>PC: Confirm machine is ready
+    PC-->>Machine: Acknowledge confirmation
+    Note over PC,Machine: Both systems enter Standby mode
+
+    %% Phase 2: Barcode Scan & Verification
+    Note over Operator,Machine: Phase 2: Barcode Scanning & Verification
+    Operator->>DB: Scan circuit board barcode
+    DB->>PC: Notify PC of new barcode
+    PC->>MES: Request board dimensions for barcode
+    MES-->>PC: Return board length and width
+    PC->>PC: Calculate required inspection points based on size
+
+    %% Phase 3: Preparing the Machine
+    Note over Operator,Machine: Phase 3: Preparing the Inspection Route
+    PC->>DB: Create a new inspection record
+    PC->>Machine: Notify start of recipe download (Total points)
+    Machine-->>PC: Acknowledge
+    PC->>Machine: Send X and Y coordinates for all inspection points
+    PC->>Machine: Notify end of recipe download
+    Machine->>PC: Confirm recipe is loaded
+    PC-->>Machine: Acknowledge
+    PC->>Machine: Command machine to start inspection
+
+    %% Phase 4: Taking Photos
+    Note over Operator,Machine: Phase 4: The Inspection Loop
+    loop For every inspection point
+        Machine->>PC: Notify machine is moving to next point
+        PC-->>Machine: Acknowledge
+        Note over Machine: The Machine moves the XY table
+        
+        Machine->>PC: Notify machine has arrived at destination
+        PC-->>Machine: Acknowledge
+        
+        Machine->>PC: Request permission to capture image
+        PC-->>Machine: Grant permission
+        
+        Note right of PC: The PC coordinates the hardware
+        PC->>Camera: Trigger image capture (Top & Bottom)
+        Camera-->>PC: Return captured images
+        
+        Note left of PC: Saving and displaying results
+        PC->>DB: Save images and inspection metadata
+        DB-->>Operator: Display new images on the dashboard
+        
+        PC->>Machine: Confirm image capture is complete
+        Machine-->>PC: Acknowledge
+        Machine->>PC: Notify camera window is closed
+        PC-->>Machine: Acknowledge
+        Machine->>PC: Mark current inspection point as completed
+        PC-->>Machine: Acknowledge
     end
-    
-    PC->>API: Marks Run as COMPLETED
-    API-->>UI: Refreshes Dashboard Gallery
+
+    %% Phase 5: Finishing Up
+    Note over Operator,Machine: Phase 5: Run Completion
+    Machine->>PC: Notify all inspection points are completed
+    PC-->>Machine: Acknowledge
+    PC->>DB: Mark the inspection record as Completed
+    PC->>Machine: Send system ready signal for the next board
+    Note over PC,Machine: Both systems return to Standby mode
 ```
 
 ---
 
-## 🏭 Industrial Deployment (Real Hardware Integration)
+## 🚀 Quick Start (Local Simulation)
 
-Deploying the system onto an actual Industrial PC (IPC) connected to physical PLCs and GigE Cameras requires network configuration and environment variable adjustments.
+You can run the entire system on a standard PC without any industrial hardware. The system includes built-in simulators for both the PLC and the factory MES.
 
-### Step 1: Network Configuration
-1. Ensure your IPC has a static IP address on the same subnet as the PLC and Cameras (e.g., `192.168.1.xxx`).
-2. Verify you can `ping` the PLC's IP address from the IPC.
+### Prerequisites
+1. **Python 3.10+**
+2. **Node.js 18+**
+3. **Docker Desktop** (Required for PostgreSQL)
 
-### Step 2: Configure Environment Variables
-In the root directory of this repository, create or edit the `.env` file to match your factory floor settings:
-
-```ini
-# PLC Configuration
-PLC_HOST=192.168.1.100     # The actual IP of the Mitsubishi PLC
-PLC_PORT=5002              # SLMP TCP Port
-PLC_NETWORK_NO=0
-PLC_PC_NO=255
-
-# Camera Configuration
-CAMERA_TOP_ID=CAM_T_001
-CAMERA_BOTTOM_ID=CAM_B_001
-USE_REAL_CAMERA=true       # Set to true to bypass simulation and use the real SDK
-
-# Database Configuration
-POSTGRES_USER=aoi_user
-POSTGRES_PASSWORD=aoi_pass
-POSTGRES_DB=ntust_aoi_db
-```
-
-### Step 3: Implement Camera SDK
-Out of the box, `pc_controller.py` uses a dummy camera class (`DummyCameraSDK`). To integrate your physical cameras:
-1. Open `machine_control/pc_controller.py`.
-2. Locate the `RealCameraSDK` class.
-3. Replace the placeholder `start()`, `stop()`, and `save_latest()` methods with the actual Python SDK commands provided by your camera manufacturer (e.g., PyPylon for Basler cameras, or Spinnaker for FLIR cameras).
-
-### Step 4: Launching
-Run the system exactly as you would in simulation mode:
+### Step 1: Install Dependencies
 ```bash
-python launcher.py
+# Install Python backend dependencies
+pip install -r requirements.txt
+
+# Install React frontend dependencies
+cd NTUST-AOI-UI
+npm install
+cd ..
 ```
-Click **"Start All"**. The `pc_controller` will read the `.env` file, connect to the physical PLC at `192.168.1.100`, initialize the real cameras, and wait for commands from the Web UI.
 
----
+### Step 2: Start the System
+You can start the entire stack (Database, API, Frontend, and PC Controller) using the headless runner:
+```bash
+python headless_runner.py start
+```
 
-## 📂 Project Documentation
+### Step 3: Access the Dashboard
+Open your browser and navigate to: **http://localhost:3001**
 
-Deepen your understanding of the system's architecture and logic by reading the internal documentation:
+Input a mock Serial Number (e.g., `SN24_TEST`) to initiate a simulated inspection run.
 
-- [**System Workflows**](docs/EN/WORKFLOWS.md): Detailed explanations of what happens when entering new, duplicate, or failed Serial Numbers.
-- [**Database Schema**](docs/EN/DATABASE_SCHEMA.md): Complete breakdown of the PostgreSQL tables and entity relationships.
-
----
-
-## 🛠 Tech Stack Overview
-- **HMI Frontend**: React, Vite, Tailwind CSS.
-- **Backend API**: Python FastAPI, Uvicorn, Psycopg2.
-- **Machine Control**: Python SLMP (Mitsubishi PLC protocol), Socket programming.
-- **Database**: PostgreSQL (Dockerized).
-
-
-Searched for "json_data.get"
-Searched for "HasData"
-Viewed serialtest_api_client.py:120-149
-
-Xin lỗi bạn, bạn nói rất đúng! Tôi vừa kiểm tra lại hàm `_result_from_raw` trong `serialtest_api_client.py`. Field `IsFinished` hoàn toàn chưa được code của chúng ta sử dụng tới. 
-
-Các trường **thực sự đang được phần mềm đọc và bắt buộc phải có** để hệ thống hoạt động trơn tru chỉ gồm: `HasData`, `M_NO`, và `P_NO`. Tôi gửi lại bản chuẩn xác (không chứa comment) nhé:
-
-### 1. File JSON chuẩn (gửi cho IT Shopfloor):
-```json
-{
-  "HasData": "1",
-  "M_NO": "MO-40291",
-  "P_NO": "PCB-MD-X99",
-  "Msg": ""
-}
+To shut down the system and clean up background processes, run:
+```bash
+python headless_runner.py stop
 ```
 
 ---
 
-### 2. Ý báo cáo cập nhật cho slide: "Shopfloor (MES) Integration"
-*(Đã loại bỏ ý về IsFinished)*
+## 🏭 Industrial Deployment
 
-- **Real-Time S/N Validation**: 
-  - Directly integrated with the factory's MES via HTTP APIs to validate scanned Serial Numbers instantaneously before triggering any physical machine operations.
+If you are deploying this system to the actual factory floor (connecting to the physical FX5U PLC and real GigE Cameras), please refer to our detailed step-by-step deployment guide:
 
-- **Automated Order Tracking**: 
-  - Automatically extracts the Manufacturing Order (`M_NO`) and Product Model (`P_NO`) directly from the Shopfloor API. 
-  - Enables dynamic grouping of inspection results and autonomous tracking of actual production quantities (`actual_quantity`) without manual operator input.
+👉 [**Real Hardware Integration Guide**](docs/requirements/REAL_HARDWARE_INTEGRATION.md)
 
-- **Fail-Safe Mechanism**: 
-  - Built-in conditional locks that prevent the PLC and Cameras from actuating if the MES reports an invalid S/N (`HasData: "0"`).
-  - Significantly reduces machine wear, minimizes material waste, and eliminates human entry errors.
+---
+
+## 📂 Documentation & AI Onboarding
+
+For comprehensive technical details, please refer to the following documents:
+
+- **[AI Codebase Map](AI_CODEBASE_MAP.md)**: A high-level directory map for AI indexing and token saving.
+- **[System Workflows](docs/EN/WORKFLOWS.md)**: Extended documentation on operational states.
+- **[Database Schema](docs/EN/DATABASE_SCHEMA.md)**: Documentation of the PostgreSQL tables and API endpoints.
+
+*Note for AI Agents: Always read `.agents/AGENTS.md` before executing any refactoring tasks within this repository.*
