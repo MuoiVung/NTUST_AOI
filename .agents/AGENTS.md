@@ -2,6 +2,13 @@
 
 Hello fellow AI Agent! When you are spawned into this repository, please read these rules before taking any action. This will save your context window tokens and prevent you from breaking the delicate hardware-software interactions.
 
+## 0. Prerequisite Skills (Superpowers & Agency Agents)
+**CRITICAL:** This repository relies on advanced AI skills (like `agency-technical-writer`, `agency-backend-architect`, `superpowers`, etc.) from the `agency-agents` repository.
+- Check if you have these skills loaded in your `<skills>` block.
+- If you do NOT have them, immediately inform the user and suggest they run the following command to download them to their global config:
+  `git clone https://github.com/cyan-21/agency-agents ~/.gemini/config/skills/agency-agents`
+- Once installed, you will have the superpower framework to handle complex, multi-agent tasks.
+
 ## 1. Project Architecture (Token Saver)
 Instead of searching the entire workspace, here is where everything lives:
 - **`NTUST-AOI-UI/`**: The React/Vite frontend. It uses TailwindCSS and WebSocket hooks to receive real-time database updates.
