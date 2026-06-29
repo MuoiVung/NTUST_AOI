@@ -20,8 +20,26 @@ from __future__ import annotations
 import argparse
 import hashlib
 import time
+import logging
+from logging.handlers import RotatingFileHandler
+import sys
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger("pc_controller")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    rfh = RotatingFileHandler("pc_controller.log", maxBytes=10*1024*1024, backupCount=5)
+    sh = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    rfh.setFormatter(formatter)
+    sh.setFormatter(formatter)
+    logger.addHandler(rfh)
+    logger.addHandler(sh)
+
+def print(*args, **kwargs):
+    logger.info(" ".join(map(str, args)))
+
 
 from database_pg import PostgresDatabase, RunInfo, StepInfo, open_database
 from recipe import Recipe, RecipeStep, RecipeValidationError, generate_grid_recipe, validate_board_dimensions
@@ -74,6 +92,7 @@ class PcController:
         self.camera_port = camera_port
         self.requested_mode = mode
         self.state = PcState.STARTUP
+        self.reconnect_attempts = 0
         self.client = Slmp3eClient(SlmpConfig(host=host, port=port))
         self.mailbox = PcEventMailbox(self.client)
         self.plc_host = host
@@ -170,6 +189,7 @@ class PcController:
             try:
                 self.client.connect()
                 print(f"[PC] connected to PLC at {self.host}:{self.port}")
+                self.reconnect_attempts = 0
                 self.db.set_config("plc_status", "OK")
                 self.mailbox.sync_sequence()
                 self.mailbox.publish_pc_event(EventCode.PC_READY)
@@ -455,8 +475,11 @@ class PcController:
             except:
                 pass
             
-            time.sleep(3.0)
-            print("[PC] Auto-reconnecting...")
+            # Exponential Backoff for Reconnection
+            self.reconnect_attempts += 1
+            sleep_time = min(2.0 * (2 ** (self.reconnect_attempts - 1)), 30.0)
+            print(f"[PC] Auto-reconnecting in {sleep_time} seconds... (Attempt {self.reconnect_attempts})")
+            time.sleep(sleep_time)
             self.transition(PcState.STARTUP)
 
     def prepare_manual_run(self) -> None:

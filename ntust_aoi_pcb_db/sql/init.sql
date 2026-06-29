@@ -50,6 +50,7 @@ CREATE TABLE system_configs (
 -- Indexes
 CREATE INDEX idx_runs_serial ON runs(serial_number);
 CREATE INDEX idx_runs_order  ON runs(m_no);
+CREATE INDEX idx_runs_m_no_created_at ON runs(m_no, created_at DESC);
 CREATE INDEX idx_images_run  ON images(run_number);
 
 -- Table 6: run_steps

@@ -5,6 +5,12 @@ import socket
 import webbrowser
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTabWidget, QTextEdit, QGridLayout, QFrame, QCheckBox, QMessageBox, QLineEdit, QFileDialog
@@ -455,7 +461,8 @@ class LauncherApp(QMainWindow):
         self.cards["machine"].set_status("running")
         proc_machine = self._create_process("machine")
         proc_machine.setWorkingDirectory(os.path.join(BASE_DIR, "machine_control"))
-        proc_machine.start(PYTHON_EXE, ["pc_controller.py", "--mode", "semi-auto", "--api-mode", "real", "--api-endpoint", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx"])
+        shopfloor_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx")
+        proc_machine.start(PYTHON_EXE, ["pc_controller.py", "--mode", "semi-auto", "--api-mode", "real", "--api-endpoint", shopfloor_url])
         self.processes["machine"] = proc_machine
         self.cards["machine"].set_status("ok")
         

@@ -28,7 +28,7 @@ DB_USER = os.getenv("DB_ROOT_USER", "admin")
 DB_PASS = os.getenv("DB_ROOT_PASSWORD", "aoi123!")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = os.getenv("DB_PORT", "5433")
-IMAGE_WATCH_DIR = os.getenv("IMAGE_WATCH_DIR", "/Users/namtranviet/Desktop/images")
+IMAGE_WATCH_DIR = os.getenv("IMAGE_WATCH_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "watch_dir")))
 
 # MinIO Config
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "192.168.40.21:9000")
@@ -344,9 +344,10 @@ def start_machine_run(req: RunStartRequest):
             m_no = "-"
             actual_qty = 0
             try:
-                # The mock shopfloor API is at 9090
+                # Use environment variable or fallback to mock
+                base_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx")
                 query = urllib.parse.urlencode({"sn": req.serial_number})
-                url = f"http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx?{query}"
+                url = f"{base_url}?{query}"
                 req_api = urllib.request.Request(url)
                 with urllib.request.urlopen(req_api, timeout=1.5) as response:
                     if response.status == 200:
@@ -544,7 +545,10 @@ def get_system_status():
     # Check Shopfloor API
     api_status = "ERROR"
     try:
-        req = urllib.request.Request("http://127.0.0.1:9090/ping")
+        import os
+        base_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090")
+        ping_url = base_url.split("/ashx")[0] + "/ping" if "/ashx" in base_url else "http://127.0.0.1:9090/ping"
+        req = urllib.request.Request(ping_url)
         with urllib.request.urlopen(req, timeout=0.5) as response:
             if response.status == 200:
                 api_status = "OK"

@@ -161,3 +161,38 @@ Deepen your understanding of the system's architecture and logic by reading the 
 - **Backend API**: Python FastAPI, Uvicorn, Psycopg2.
 - **Machine Control**: Python SLMP (Mitsubishi PLC protocol), Socket programming.
 - **Database**: PostgreSQL (Dockerized).
+
+
+Searched for "json_data.get"
+Searched for "HasData"
+Viewed serialtest_api_client.py:120-149
+
+Xin lỗi bạn, bạn nói rất đúng! Tôi vừa kiểm tra lại hàm `_result_from_raw` trong `serialtest_api_client.py`. Field `IsFinished` hoàn toàn chưa được code của chúng ta sử dụng tới. 
+
+Các trường **thực sự đang được phần mềm đọc và bắt buộc phải có** để hệ thống hoạt động trơn tru chỉ gồm: `HasData`, `M_NO`, và `P_NO`. Tôi gửi lại bản chuẩn xác (không chứa comment) nhé:
+
+### 1. File JSON chuẩn (gửi cho IT Shopfloor):
+```json
+{
+  "HasData": "1",
+  "M_NO": "MO-40291",
+  "P_NO": "PCB-MD-X99",
+  "Msg": ""
+}
+```
+
+---
+
+### 2. Ý báo cáo cập nhật cho slide: "Shopfloor (MES) Integration"
+*(Đã loại bỏ ý về IsFinished)*
+
+- **Real-Time S/N Validation**: 
+  - Directly integrated with the factory's MES via HTTP APIs to validate scanned Serial Numbers instantaneously before triggering any physical machine operations.
+
+- **Automated Order Tracking**: 
+  - Automatically extracts the Manufacturing Order (`M_NO`) and Product Model (`P_NO`) directly from the Shopfloor API. 
+  - Enables dynamic grouping of inspection results and autonomous tracking of actual production quantities (`actual_quantity`) without manual operator input.
+
+- **Fail-Safe Mechanism**: 
+  - Built-in conditional locks that prevent the PLC and Cameras from actuating if the MES reports an invalid S/N (`HasData: "0"`).
+  - Significantly reduces machine wear, minimizes material waste, and eliminates human entry errors.

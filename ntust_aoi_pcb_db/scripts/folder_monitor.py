@@ -112,9 +112,11 @@ class ImageHandler(FileSystemEventHandler):
         _, ext = os.path.splitext(file_name)
         if ext.lower() in ALLOWED_EXTENSIONS:
             logger.info(f"Processing image: {file_name}")
-            time.sleep(0.5)  # Chờ hệ điều hành nhả file lock
             try:
                 file_size = os.path.getsize(file_path)
+                if file_size == 0:
+                    time.sleep(0.5)  # Chỉ chờ nếu file vừa được tạo và size = 0
+                    file_size = os.path.getsize(file_path)
                 insert_image_record(file_path, file_name, file_size)
             except Exception as e:
                 logger.error(f"Error processing file {file_path}: {e}")
