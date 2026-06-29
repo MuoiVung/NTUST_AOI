@@ -21,6 +21,11 @@ services:
     volumes:
       - ./postgres_data:/var/lib/postgresql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ROOT_USER} -d pcb_aoi_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # pgAdmin 4 (Web UI for Postgres)
   pgadmin:

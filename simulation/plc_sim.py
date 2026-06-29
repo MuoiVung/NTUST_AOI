@@ -262,6 +262,9 @@ class PlcStateMachine(threading.Thread):
     def handle_pc_event(self, event_type: EventCode, sequence: int, payload: list[int]) -> None:
         if event_type == EventCode.PC_READY:
             self.acknowledge_pc_event(sequence, AckStatus.OK)
+            # Reset transmission state because PC reconnected
+            self.waiting_for_pc_ack = False
+            self.plc_event_queue.clear()
             if self.state in {PlcState.BOOT, PlcState.WAIT_PC_READY, PlcState.IDLE}:
                 self.queue_plc_event(EventCode.PLC_READY)
                 self.transition(PlcState.IDLE)

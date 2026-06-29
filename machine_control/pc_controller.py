@@ -100,6 +100,7 @@ class PcController:
         self.camera_top = RealCameraSDK("CAM1", "TOP")
         self.camera_bottom = RealCameraSDK("CAM2", "BOTTOM")
 
+        self.api_endpoint = api_endpoint
         self.db: PostgresDatabase = open_database()
         with self.db.conn.cursor() as cur:
             cur.execute("LISTEN new_run_sn;")
@@ -870,14 +871,38 @@ class PcController:
         except OSError:
             pass
         recipe_step = self.recipe_step(step_index)
+        row_idx = recipe_step.row_idx if recipe_step else 0
+        col_idx = recipe_step.col_idx if recipe_step else 0
+
+        # Send to FastAPI immediately
+        try:
+            import requests
+            import os
+            base_url = os.environ.get("FASTAPI_URL", "http://127.0.0.1:8000").rstrip('/')
+            api_url = f"{base_url}/images/"
+            payload = {
+                "run_number": self.run_code or "UNKNOWN",
+                "side": camera.side,
+                "row_idx": row_idx,
+                "col_idx": col_idx,
+                "file_size_bytes": file_size or 0,
+                "local_path": str(path)
+            }
+            response = requests.post(api_url, json=payload, timeout=2)
+            if response.status_code not in (200, 201):
+                logger.error(f"Failed to post image metadata to API: {response.text}")
+        except Exception as e:
+                logger.error(f"Error posting image metadata to API: {e}")
+
+        # Still log to local DB if needed
         self.db.log_image(
             {
                 "run_code": self.run_code,
                 "step_id": self.step_ids.get(step_index) if step_index is not None else None,
                 "file_path": str(path),
                 "image_index": camera.image_index,
-                "row_idx": recipe_step.row_idx if recipe_step else None,
-                "col_idx": recipe_step.col_idx if recipe_step else None,
+                "row_idx": row_idx,
+                "col_idx": col_idx,
                 "camera_id": camera.camera_id,
                 "camera_side": camera.side,
                 "condition": "UNKNOWN",

@@ -27,6 +27,16 @@ MOCK_DATABASE = {
         "HasData": "1",
         "Msg": "",
     },
+    "SN24_TEST": {
+        "SN": "SN24_TEST",
+        "M_NO": "MO-DEMO-24",
+        "P_NO": "PO-DEMO-24",
+        "SemiModel": "LARGE-BOARD-24-IMAGES",
+        "PCB_Length": "160",
+        "PCB_Width": "120",
+        "HasData": "1",
+        "Msg": "",
+    },
 }
 
 @app.get("/ping")

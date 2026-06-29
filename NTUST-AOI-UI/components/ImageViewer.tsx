@@ -130,6 +130,7 @@ export const ImageViewer = ({ image, onClose, onUpdate, onDelete }: ImageViewerP
                             alt={`R${image.row_idx} C${image.col_idx}`}
                             className="max-h-[100vh] md:max-h-[85vh] max-w-full object-contain select-none shadow-dark"
                             draggable={false}
+                            loading="lazy"
                         />
                     </div>
                 </div>

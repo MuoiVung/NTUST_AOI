@@ -11,6 +11,14 @@ import psycopg2
 class RunStartRequest(BaseModel):
     serial_number: str
 
+class ImageCreateRequest(BaseModel):
+    run_number: str
+    side: str
+    row_idx: int
+    col_idx: int
+    file_size_bytes: int
+    local_path: str
+
 from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, HTTPException, Query, Body, WebSocket, WebSocketDisconnect
@@ -246,6 +254,37 @@ def get_images(run_number: str, limit: int = 50, offset: int = 0):
                 (run_number, limit, offset),
             )
             return [dict(r) for r in cur.fetchall()]
+    finally:
+        release_db_connection(conn)
+
+
+@app.post("/images/")
+def create_image(img: ImageCreateRequest):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            insert_sql = """
+            INSERT INTO images (run_number, side, local_path, row_idx, col_idx, condition, file_size_bytes)
+            VALUES (%s, %s, %s, %s, %s, 'UNKNOWN', %s)
+            RETURNING image_id
+            """
+            cur.execute(insert_sql, (
+                img.run_number,
+                img.side.capitalize(),
+                img.local_path,
+                img.row_idx,
+                img.col_idx,
+                img.file_size_bytes
+            ))
+            image_id = cur.fetchone()[0]
+            conn.commit()
+            return {"status": "success", "image_id": image_id}
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        return {"status": "ignored", "detail": "Record already exists"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         release_db_connection(conn)
 

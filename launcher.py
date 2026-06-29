@@ -472,13 +472,13 @@ class LauncherApp(QMainWindow):
         proc_shopfloor.start(PYTHON_EXE, ["shopfloor_sim.py"])
         self.processes["shopfloor"] = proc_shopfloor
         
-        # 4. Monitor
-        self.cards["monitor"].set_status("running")
-        proc_mon = self._create_process("monitor")
-        proc_mon.setWorkingDirectory(DB_DIR)
-        proc_mon.start(PYTHON_EXE, ["scripts/folder_monitor.py"])
-        self.processes["monitor"] = proc_mon
+        # 4. Monitor (Disabled - Now using direct API ingestion)
         self.cards["monitor"].set_status("ok")
+        self.cards["monitor"].lbl_desc.setText("Obsolete - Replaced by API")
+        # proc_mon = self._create_process("monitor")
+        # proc_mon.setWorkingDirectory(DB_DIR)
+        # proc_mon.start(PYTHON_EXE, ["scripts/folder_monitor.py"])
+        # self.processes["monitor"] = proc_mon
         
         # 4. Sync
         if self.chk_auto_sync.isChecked():

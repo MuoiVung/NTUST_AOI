@@ -146,7 +146,7 @@ export const RunGallery = ({ runId, onBack }: { runId: string, onEdit: (runId: s
                                     className={`group flex flex-col bg-white dark:bg-slate-900 rounded-xl overflow-hidden border ${borderClass} hover:shadow-lg transition-all cursor-pointer`}
                                 >
                                     <div className="relative aspect-[4/3] bg-slate-100 dark:bg-slate-950 overflow-hidden">
-                                        <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: `url(${img.local_path || ''})` }}></div>
+                                        <img src={img.local_path || ''} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt={`R${img.row_idx} C${img.col_idx}`} />
                                         <div className="absolute top-2 right-2">
                                             <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm ${badgeClass}`}>
                                                 <span className="material-symbols-outlined text-[12px]">{iconName}</span>
