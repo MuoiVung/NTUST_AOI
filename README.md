@@ -126,7 +126,13 @@ You can start the entire stack (Database, API, Frontend, and PC Controller) usin
 python headless_runner.py start
 ```
 
-### Step 3: Access the Dashboard
+### Step 3: Add Mock Images (Optional but Recommended)
+During a simulated run, the system will randomly select PCB images to act as the camera output.
+1. Create a folder named `mock_images` in the root directory.
+2. Place a few `.jpg` or `.png` images inside it.
+3. If this folder is empty or missing, the system will generate fake placeholder image files instead.
+
+### Step 4: Access the Dashboard
 Open your browser and navigate to: **http://localhost:3001**
 
 Input a mock Serial Number (e.g., `SN24_TEST`) to initiate a simulated inspection run.
