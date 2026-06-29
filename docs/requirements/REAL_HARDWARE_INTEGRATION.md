@@ -1,43 +1,77 @@
-# Real Hardware Integration Guide
+# Real Hardware Integration Guide (Deployment Guide)
 
-This document outlines the exact steps and code modifications required to transition the NTUST_AOI system from the current simulated environment to a production environment using a real Mitsubishi PLC and an IDS Industrial Camera.
+This document provides step-by-step instructions for migrating the NTUST AOI system from a simulated environment to real hardware. This includes integrating the **Mitsubishi FX5U PLC**, the **Dual Camera System**, and the **Factory Network (MES/Shopfloor)**.
 
-## 1. PLC Integration (Mitsubishi SLMP)
+## Step 1: Network Infrastructure Preparation
 
-The SLMP protocol (MC Protocol 3E) is already fully implemented and verified. Moving to real hardware only requires network configuration changes.
+The AOI system requires the PC Controller and all hardware devices to be on the same Local Area Network (LAN).
 
-**Action Items:**
-1. Connect the PC and the Mitsubishi FX5U PLC to the same local network.
-2. In the PLC parameters (GX Works3), configure an Ethernet port to accept SLMP TCP connections on a specific port (e.g., `5000`).
-3. Modify the startup configuration in the PC (e.g., via `.env` or `launcher.py`) to point to the real PLC's IP address instead of `127.0.0.1:15000`.
-   - *No changes to `shared_protocol.py` are required as the memory addressing rules remain identical.*
+1. **Set a Static IP for the Workstation (PC Controller):**
+   - Open network settings on the PC and assign a static IPv4 address. Example: `192.168.3.10`.
+   - Subnet Mask: `255.255.255.0`.
+2. **Verify PLC FX5U Connection:**
+   - Connect an Ethernet cable from the FX5U's RJ45 port to the PC (or via a Network Switch).
+   - Ensure the PLC's IP is statically set via GX Works3 (Example: `192.168.3.250`).
+   - Open a Terminal on the PC and run: `ping 192.168.3.250`. Ensure there is a successful reply.
+3. **Open the SLMP Port on the FX5U:**
+   - In GX Works3 -> Ethernet Configuration.
+   - Add a new **SLMP Connection (TCP)**.
+   - Set the Port to `15000` (or your configured port; the source code defaults to 15000).
 
-## 2. Camera Integration (IDS uEye / Peak)
+## Step 2: PC Controller Software Configuration
 
-The system currently uses a mock class (`RealCameraSDK`) that copies fake images. This must be replaced with the actual camera manufacturer's SDK bindings (e.g., `ids_peak` or `pyueye` for Python).
+You must disable "Simulation Mode" and enable "Real Mode" by configuring environment variables and startup parameters.
 
-**Action Items:**
-1. **Dependencies:** Install the IDS Peak Python bindings or equivalent OpenCV bindings (`pip install ids_peak ids_peak_ipl` or `opencv-python`).
-2. **Modify `RealCameraSDK` in `machine_control/pc_controller.py`:**
-   - **`__init__()` & `start()`:** Initialize the IDS DeviceManager, find the connected camera, and open a data stream. Configure settings like Exposure, Gain, and PixelFormat.
-   - **`save_latest()`:** Remove the `shutil.copy2` mockup logic. Replace it with a command to acquire the latest image buffer from the camera stream, convert it to a NumPy array, and save it to the provided `filepath` (e.g., using `cv2.imwrite(filepath, image_array)`).
-   - **`stop()`:** Ensure the device stream is cleanly closed and memory is freed to prevent locking issues on restart.
-3. **Trigger Synchronization:** Decide whether the camera uses a **Software Trigger** (PC sends a command over USB/GigE) or a **Hardware Trigger** (PLC sends an electrical pulse directly to the camera's GPIO). If using Software Trigger, the `save_latest()` function must explicitly send the trigger command.
+1. **Configure the `.env` file:**
+   Open the `.env` file (or `ntust_aoi_pcb_db/.env`) and set the following:
+   ```env
+   # Point the Database API to the running backend (usually localhost)
+   FASTAPI_URL=http://127.0.0.1:8000
+   
+   # Point the Shopfloor API to the real factory MES server
+   SHOPFLOOR_API_URL=http://<MES_SERVER_IP>/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx
+   ```
 
-## 3. Factory MES API Integration
+2. **Configure Camera Mode (`machine_control/pc_controller.py`):**
+   Ensure the `--camera-mode real` flag is passed to the `pc_controller.py` script. The system expects a dual-camera setup. Verify that the necessary Camera SDK Drivers are properly installed on the host OS.
 
-The system currently bypasses external network calls by using a mock data fixture to determine PCB dimensions.
+## Step 3: System Startup
 
-**Action Items:**
-1. In `machine_control/pc_controller.py` (or through a `.env` variable), change the initialization of the `SerialTestApiClient` from `api_mode="fixture"` to `api_mode="http"`.
-2. Provide the actual factory MES API Endpoint URL to the client.
-3. If the factory API requires authentication (e.g., Bearer Token, API Key), modify `serialtest_api_client.py` to include the necessary HTTP headers in the `requests.get()` call.
+Instead of clicking through individual scripts, use the `headless_runner.py` utility for a clean startup.
 
-## 4. Vision/AI Core Integration (Defect Detection)
+1. **Disable the PLC Simulator:**
+   **DO NOT** run `plc_sim.py`.
+   *(If you are using `headless_runner.py start`, edit the script and comment out the line that starts `plc_sim.py`).*
 
-Currently, the `folder_monitor.py` script detects new images and immediately inserts them into the database with a default condition of `UNKNOWN` or `PASS`.
+2. **Start the Machine Logic:**
+   Open a Terminal and run the command to connect to the real PLC:
+   ```bash
+   cd machine_control
+   python pc_controller.py --mode semi-auto --api-mode real --camera-mode real --plc-host 192.168.3.250 --plc-port 15000 --api-endpoint http://<MES_SERVER_IP>/...
+   ```
+   *(If you are using `launcher.py`, click the **Settings** button on the top right and enter the real PLC IP `192.168.3.250` in the configuration box).*
 
-**Action Items:**
-1. **AI Processing Pipeline:** Integrate your Deep Learning models (e.g., YOLO, ResNet) or OpenCV heuristic algorithms directly into `folder_monitor.py` (or as a separate microservice).
-2. **Database Update:** Before `folder_monitor.py` executes `insert_image_record()`, pass the `file_path` to the AI Engine. 
-3. Based on the AI Engine's output, dynamically set the `condition` variable to `'PASS'` or `'FAIL'`, and save bounding box metadata if defects are found.
+3. **Start the UI and Database:**
+   If using `launcher.py`, click **Start All** (except the PLC Sim).
+   The Backend System (Port 8000) and Frontend (Port 3001) will be ready to ingest images.
+
+## Step 4: Dry-Run and Verification Procedure
+
+Once the system is booted, follow these steps to isolate any potential issues:
+
+### 4.1. Handshake Verification
+- **PC Terminal Log:** The `pc_controller.py` terminal must log: `[PC] connected to PLC at 192.168.3.250:15000`.
+- **Operator Dashboard (React UI):** The PLC status indicator must turn green and display **"CONNECTED"**. If it shows an error, verify that the SLMP port in GX Works3 is open and the ethernet cable is secured.
+
+### 4.2. Shopfloor (MES) Verification
+- Scan a real barcode (S/N) into the React UI.
+- Check the `pc_controller.py` terminal to ensure the API successfully retrieved the board dimensions (e.g., `200x150 mm`). If it returns a 404/500 error, verify the network routing to the factory's MES server.
+
+### 4.3. Camera Verification (1-Step Dry-Run)
+- Place a sample PCB on the XY Table.
+- The PLC will execute the `SEMI_AUTO_RUN` command. When the XY table stops at the first coordinate, you should hear the camera trigger mechanism.
+- Observe the React UI. The captured image should instantly populate on the screen. If it does, the full pipeline (Hardware -> PC -> DB -> WebSocket) is functioning perfectly!
+
+### Troubleshooting Guide
+- **PLC Timeout:** Check the Sequence Event Queue. If the PLC does not receive a `PC_ACK` response, it will stall the execution loop. Ensure `pc_controller.py` is running and has not crashed.
+- **Images Not Appearing on UI:** Check the FastAPI backend logs (`uvicorn`) to verify if the POST request from `pc_controller.py` was received. If not, double-check the `FASTAPI_URL` environment variable configuration.

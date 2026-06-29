@@ -1,149 +1,103 @@
-# AOI System Operational Workflows
+# AOI System Operational Workflow
 
-This document outlines the detailed workflows for the NTUST AOI system during typical inspection cycles. The system uses a PostgreSQL database to track manufacturing orders, individual PCB scans (runs), and scan points.
+This document outlines the operational sequences of the NTUST Automated Optical Inspection (AOI) system. It focuses on the logical steps and actions taken by each component, written in plain language for clarity.
+
+## 1. System Components
+
+The system consists of the following interacting nodes:
+*   **The Machine (PLC)**: The physical robot that controls the XY Table, the conveyor belt, and the lighting.
+*   **Main Computer (PC)**: The central processing unit. It coordinates the machine's movements, triggers the cameras, and processes data.
+*   **Camera System**: Dual-camera setup (Top and Bottom) that takes high-resolution photos of the circuit boards.
+*   **Factory System (MES)**: The external factory database that provides board dimensions based on the barcode.
+*   **Database & Dashboard**: The local repository and user interface that stores inspection histories and displays live images.
 
 ---
 
-## Overall System Architecture & Interaction
+## 2. Main Inspection Workflow
+
+The following sequence diagram illustrates a complete inspection cycle, from startup to the completion of a board.
 
 ```mermaid
 sequenceDiagram
-    participant UI as Web UI (React)
-    participant API as Backend API
-    participant DB as Database
-    participant PC as PC Controller
-    participant PLC as SLMP PLC
-    participant CAM as Cameras
+    participant Operator as Operator
+    participant DB as Dashboard & Database
+    participant PC as Main Computer (PC)
+    participant Camera as Cameras
+    participant MES as Factory System
+    participant Machine as The Machine (PLC)
 
-    UI->>API: 1. Request to start scan (S/N)
-    API->>DB: 2. Check previous runs & Create new run
-    API->>DB: 3. Publish "New Run" event
-    API-->>UI: 4. Acknowledge success
-    DB-->>PC: 5. Receive "New Run" signal
-    PC->>PLC: 6. Handshake & send grid parameters
-    PLC-->>PC: 7. Move machine & trigger camera
-    PC->>CAM: 8. Capture image
-    CAM-->>PC: 9. Image data
-    PC->>DB: 10. Save scan point data
-    PLC-->>PC: 11. End of sequence
-    PC->>DB: 12. Mark run as COMPLETED
-    DB-->>API: 13. Trigger UI update
-    API-->>UI: 14. Display results & Unlock UI
+    %% Phase 1: Initialization
+    Note over Operator,Machine: Phase 1: Initialization & Handshake
+    PC->>Machine: Establish network connection
+    PC->>DB: Update machine status to Connected
+    PC->>Machine: Send system ready signal
+    Machine-->>PC: Acknowledge signal
+    Machine->>PC: Confirm machine is ready
+    PC-->>Machine: Acknowledge confirmation
+    Note over PC,Machine: Both systems enter Standby mode
+
+    %% Phase 2: Barcode Scan & Verification
+    Note over Operator,Machine: Phase 2: Barcode Scanning & Verification
+    Operator->>DB: Scan circuit board barcode
+    DB->>PC: Notify PC of new barcode
+    PC->>MES: Request board dimensions for barcode
+    MES-->>PC: Return board length and width
+    PC->>PC: Calculate required inspection points based on size
+
+    %% Phase 3: Preparing the Machine
+    Note over Operator,Machine: Phase 3: Preparing the Inspection Route
+    PC->>DB: Create a new inspection record
+    PC->>Machine: Notify start of recipe download (Total points)
+    Machine-->>PC: Acknowledge
+    PC->>Machine: Send X and Y coordinates for all inspection points
+    PC->>Machine: Notify end of recipe download
+    Machine->>PC: Confirm recipe is loaded
+    PC-->>Machine: Acknowledge
+    PC->>Machine: Command machine to start inspection
+
+    %% Phase 4: Taking Photos
+    Note over Operator,Machine: Phase 4: The Inspection Loop
+    loop For every inspection point
+        Machine->>PC: Notify machine is moving to next point
+        PC-->>Machine: Acknowledge
+        Note over Machine: The Machine moves the XY table
+        
+        Machine->>PC: Notify machine has arrived at destination
+        PC-->>Machine: Acknowledge
+        
+        Machine->>PC: Request permission to capture image
+        PC-->>Machine: Grant permission
+        
+        Note right of PC: The PC coordinates the hardware
+        PC->>Camera: Trigger image capture (Top & Bottom)
+        Camera-->>PC: Return captured images
+        
+        Note left of PC: Saving and displaying results
+        PC->>DB: Save images and inspection metadata
+        DB-->>Operator: Display new images on the dashboard
+        
+        PC->>Machine: Confirm image capture is complete
+        Machine-->>PC: Acknowledge
+        Machine->>PC: Notify camera window is closed
+        PC-->>Machine: Acknowledge
+        Machine->>PC: Mark current inspection point as completed
+        PC-->>Machine: Acknowledge
+    end
+
+    %% Phase 5: Finishing Up
+    Note over Operator,Machine: Phase 5: Run Completion
+    Machine->>PC: Notify all inspection points are completed
+    PC-->>Machine: Acknowledge
+    PC->>DB: Mark the inspection record as Completed
+    PC->>Machine: Send system ready signal for the next board
+    Note over PC,Machine: Both systems return to Standby mode
 ```
 
 ---
 
-## 1. Normal Flow (New S/N Inspection)
+## 3. Synchronization Mechanism
 
-**Scenario:** The operator inputs a brand new Serial Number (S/N) that has never been scanned before.
-
-```mermaid
-sequenceDiagram
-    participant UI as Operator UI
-    participant API as Backend API
-    participant DB as Database
-
-    UI->>API: Submits new Serial Number
-    API->>DB: Checks for existing records
-    DB-->>API: No records found
-    API->>DB: Creates new Active Record
-    API->>DB: Broadcasts "Start Scan" signal
-    DB-->>UI: Locks UI (Processing...)
-```
-
-### Step-by-step Process:
-1. **Input Phase:** The operator enters the S/N via the Web UI (Operator Dashboard) using a barcode scanner or manual entry.
-2. **Pre-flight Check:** The UI calls `GET /system/status` to ensure the PLC, Shopfloor API, and Camera are all online. If any system is disconnected, the UI rejects the input immediately.
-3. **Start Run (`POST /runs/start`):**
-   - The backend checks the database for any previous runs associated with this S/N. Since it's new, no conflicts are found.
-   - The backend creates a new entry in the `runs` table with:
-     - `status = 'PENDING'`
-     - `is_latest = TRUE`
-   - The backend broadcasts a Postgres `NOTIFY` signal containing the S/N.
-4. **Hardware Execution:**
-   - The `pc_controller.py` service (which is constantly listening to the DB) receives the `NOTIFY` signal.
-   - It transitions from `IDLE` to `SEMI_SELECT` and begins the inspection recipe, communicating with the PLC to move the machine and the Camera to capture images.
-5. **Completion:**
-   - Once all scan points are captured, the PLC sends a `RUN_COMPLETE` signal.
-   - `pc_controller.py` updates the `runs` table, changing the status from `PENDING` to `COMPLETED` (or `PASS`/`FAIL` based on inference).
-   - The system recounts the total `actual_quantity` for the Manufacturing Order by counting all runs where `is_latest = TRUE` and `status != 'PENDING'`.
-
----
-
-## 2. Duplicate Flow (Re-scanning a Completed S/N)
-
-**Scenario:** The operator inputs an S/N that has already been scanned and successfully completed (status `COMPLETED`, `PASS`, or `FAIL`).
-
-```mermaid
-sequenceDiagram
-    participant UI as Operator UI
-    participant API as Backend API
-    participant DB as Database
-
-    UI->>API: Submits duplicate Serial Number
-    API->>DB: Checks for existing records
-    DB-->>API: Found previous Completed record
-    API->>DB: Archives the old record (Historical Data)
-    Note over API,DB: The Active Scanned Quantity temporarily drops by 1
-    API->>DB: Creates new Active Record
-    API->>DB: Broadcasts "Start Scan" signal
-    DB-->>UI: Locks UI (Processing...)
-```
-
-### Step-by-step Process:
-1. **Input & Validation:** The operator inputs the old S/N. The pre-flight check ensures the system is online.
-2. **Start Run (`POST /runs/start`):**
-   - The backend checks the database and discovers a previous run for this S/N.
-   - It executes `check_and_invalidate_previous_runs`:
-     - It finds the old run (e.g., status `COMPLETED`).
-     - It updates the old run to set `is_latest = FALSE`. This preserves the historical data and images but removes it from the current active count.
-   - The backend creates a **new** entry in the `runs` table with `status = 'PENDING'` and `is_latest = TRUE`.
-   - The overall `actual_quantity` for the order temporarily decreases by 1 (since the old run is no longer `is_latest = TRUE`, and the new one is still `PENDING`).
-3. **Hardware Execution:** The system executes the hardware scan as normal.
-4. **Completion:**
-   - Once the scan finishes, the new run is marked `COMPLETED`.
-   - The `actual_quantity` for the order is recalculated, restoring the count to its correct value.
-   - On the Gallery Dashboard, the old run will display a special "OLD DATA" badge to differentiate it from the current active run.
-
----
-
-## 3. Recovery Flow (Re-scanning an Interrupted/Failed S/N)
-
-**Scenario:** The system was scanning a PCB, but a critical failure occurred mid-run (e.g., the PLC lost power, the network cable was unplugged, or the application crashed). The operator must restart the scan for the same S/N.
-
-```mermaid
-sequenceDiagram
-    participant UI as Operator UI
-    participant PC as PC Controller
-    participant DB as Database
-    participant API as Backend API
-
-    Note over PC,DB: Hardware disconnects mid-run
-    PC->>DB: Marks current run as FAILED
-    PC->>DB: Broadcasts Error signal
-    DB-->>UI: Unlocks UI and shows Error Alert
-    PC->>PC: Shuts down sockets and Auto-Reconnects
-
-    Note over UI,API: Operator retries the same Serial Number
-    UI->>API: Submits failed Serial Number
-    API->>DB: Checks for existing records
-    DB-->>API: Found previous FAILED record
-    API->>DB: Archives the failed record (Historical Data)
-    API->>DB: Creates new Active Record
-    API->>DB: Broadcasts "Start Scan" signal
-```
-
-### Step-by-step Process:
-1. **Failure Detection & Auto-Recovery:**
-   - If the PLC disconnects mid-run, `pc_controller.py` detects the lost connection (either via Socket `OSError` or the `IDLE` heartbeat).
-   - `pc_controller.py` immediately updates the current run's status in the DB to `FAILED`.
-   - It transitions to an `ERROR` state, gracefully shuts down camera and socket resources, waits 3 seconds, and re-initializes (`STARTUP`) to automatically restore the connection.
-   - A WebSocket error event is fired to the Web UI, unlocking the operator dashboard so they can retry.
-2. **Input Phase:** The operator enters the same S/N again.
-3. **Start Run (`POST /runs/start`):**
-   - The backend checks the database and finds the `FAILED` run.
-   - Since `FAILED` is a terminal state (not `PENDING`), it treats it identically to a completed run: it sets `is_latest = FALSE` on the failed run to keep it as historical data.
-   - A new run is created with `status = 'PENDING'` and `is_latest = TRUE`.
-4. **Hardware Execution:** The inspection restarts from the beginning of the recipe for the new run.
-
-*(Note: If a run was somehow completely stuck in a `PENDING` state due to a total power loss before it could be marked `FAILED`, the `POST /runs/start` endpoint will completely `DELETE` the old `PENDING` run from the database to prevent ghost data before starting the new run).*
+To ensure the machine and the computer never lose synchronization, they rely on a strict handshake protocol:
+*   **Event Polling**: The Main Computer continuously monitors the Machine's memory registers to detect new events or status changes.
+*   **Acknowledgment (ACK)**: Every time the Machine sends an event (like "arrived at destination"), the Computer must send back an acknowledgment. The Machine will pause and wait indefinitely until it receives this acknowledgment, ensuring no step or photo is ever skipped.
+*   **Safety Heartbeat**: Both the Machine and the Computer continuously exchange a heartbeat signal. If the connection is lost or unplugged, the heartbeat stops, and the Machine automatically locks its motors within 5 seconds to prevent accidents.
