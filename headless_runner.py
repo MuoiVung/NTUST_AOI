@@ -8,13 +8,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def start_all():
     print("[RUNNER] Starting Docker Compose (PostgreSQL)...")
-    subprocess.run(["docker-compose", "up", "-d"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"))
+    subprocess.run(["docker-compose", "up", "-d"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"), shell=True)
     
     print("[RUNNER] Starting FastAPI Backend (Port 8000)...")
     proc_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"))
     
     print("[RUNNER] Starting Vite Frontend (Port 3001)...")
-    proc_ui = subprocess.Popen(["npm", "run", "dev"], cwd=os.path.join(BASE_DIR, "NTUST-AOI-UI"))
+    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+    proc_ui = subprocess.Popen([npm_cmd, "run", "dev"], cwd=os.path.join(BASE_DIR, "NTUST-AOI-UI"), shell=sys.platform=="win32")
     
     print("[RUNNER] Starting PLC Simulator (Port 15000)...")
     proc_plc = subprocess.Popen([sys.executable, "plc_sim.py"], cwd=os.path.join(BASE_DIR, "simulation"))
@@ -45,16 +46,33 @@ def stop_all():
                 pid = line.strip()
                 if pid:
                     try:
-                        subprocess.run(["kill", "-9", pid], stderr=subprocess.DEVNULL)
+                        if sys.platform == "win32":
+                            subprocess.run(["taskkill", "/F", "/T", "/PID", pid], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                        else:
+                            subprocess.run(["kill", "-9", pid], stderr=subprocess.DEVNULL)
                     except:
                         pass
         os.remove(PID_FILE)
     
-    print("[RUNNER] Running pkill as a fallback to ensure clean state...")
-    subprocess.run("pkill -f 'uvicorn'", shell=True, stderr=subprocess.DEVNULL)
-    subprocess.run("pkill -f 'vite'", shell=True, stderr=subprocess.DEVNULL)
-    subprocess.run("pkill -f 'plc_sim.py'", shell=True, stderr=subprocess.DEVNULL)
-    subprocess.run("pkill -f 'pc_controller.py'", shell=True, stderr=subprocess.DEVNULL)
+    print("[RUNNER] Running fallback termination to ensure clean state...")
+    if sys.platform == "win32":
+        try:
+            for port in [8000, 3001, 9090, 15000, 16000]:
+                try:
+                    out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True)
+                    for line in out.strip().split('\n'):
+                        if "LISTENING" in line:
+                            pid = line.strip().split()[-1]
+                            subprocess.run(["taskkill", "/F", "/T", "/PID", pid], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                except subprocess.CalledProcessError:
+                    pass
+        except Exception:
+            pass
+    else:
+        subprocess.run("pkill -f 'uvicorn'", shell=True, stderr=subprocess.DEVNULL)
+        subprocess.run("pkill -f 'vite'", shell=True, stderr=subprocess.DEVNULL)
+        subprocess.run("pkill -f 'plc_sim.py'", shell=True, stderr=subprocess.DEVNULL)
+        subprocess.run("pkill -f 'pc_controller.py'", shell=True, stderr=subprocess.DEVNULL)
 
     print("[RUNNER] Stopping Docker Compose...")
     subprocess.run(["docker-compose", "down"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"))

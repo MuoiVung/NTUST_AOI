@@ -6,7 +6,8 @@ Hello fellow AI Agent! When you are spawned into this repository, please read th
 **CRITICAL:** This repository relies on advanced AI skills (like `agency-technical-writer`, `agency-backend-architect`, `superpowers`, etc.) from the `agency-agents` repository.
 - Check if you have these skills loaded in your `<skills>` block.
 - If you do NOT have them, immediately inform the user and suggest they run the following command to download them to their global config:
-  `git clone https://github.com/cyan-21/agency-agents ~/.gemini/config/skills/agency-agents`
+  `git clone https://github.com/msitarzewski/agency-agents ~/.gemini/config/skills/agency-agents`
+  `git clone https://github.com/obra/superpowers ~/.gemini/config/skills/superpowers`
 - **Important:** When the user downloads the `agency-agents` repo, it contains over 200 agents. However, the AI will automatically read the `.agents/skills.json` file in this workspace to aggressively filter out the irrelevant ones. The AI on the new machine will NOT crash from token limits!
 - Once installed, you will have the superpower framework to handle complex, multi-agent tasks.
 

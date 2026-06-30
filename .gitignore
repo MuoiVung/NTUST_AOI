@@ -48,3 +48,13 @@ Thumbs.db
 **/nginx/.htpasswd
 
 **/watch_dir/
+
+# Large installer binaries
+Miniconda3.exe
+*.exe
+
+# Debug/scratch scripts (not part of production)
+kill_ports.py
+ntust_aoi_pcb_db/check_schema.py
+
+# Test/integration scripts (keep test_sn5434.py for CI reference)

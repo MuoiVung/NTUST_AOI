@@ -135,27 +135,32 @@ manager = ConnectionManager()
 
 # ─── PG Notify Listener ───────────────────────────────────────────────────────
 async def listen_pg_notifications():
-    conn = None
-    try:
-        # We need a dedicated connection for listening
-        conn = psycopg2.connect(DB_DSN)
-        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        with conn.cursor() as cur:
-            cur.execute("LISTEN ui_update;")
-        
-        print("[WS] Started listening to PG NOTIFY ui_update")
-        while True:
-            if select.select([conn], [], [], 1.0) == ([conn], [], []):
-                conn.poll()
-                while conn.notifies:
-                    notify = conn.notifies.pop(0)
-                    await manager.broadcast(notify.payload)
-            await asyncio.sleep(0.1)
-    except Exception as e:
-        print(f"[WS] Error in pg notification listener: {e}")
-    finally:
-        if conn:
-            conn.close()
+    print("[WS] PG notification listener task started")
+    while True:
+        conn = None
+        try:
+            conn = psycopg2.connect(DB_DSN)
+            conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            with conn.cursor() as cur:
+                cur.execute("LISTEN ui_update;")
+            print("[WS] Connected and listening to PG NOTIFY ui_update")
+            while True:
+                r, _, _ = select.select([conn], [], [], 1.0)
+                if r:
+                    conn.poll()
+                    while conn.notifies:
+                        notify = conn.notifies.pop(0)
+                        await manager.broadcast(notify.payload)
+                await asyncio.sleep(0.1)
+        except Exception as e:
+            print(f"[WS] Error/Disconnect in pg notification listener: {e}")
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            print("[WS] Reconnecting to database in 3 seconds...")
+            await asyncio.sleep(3)
 
 @app.websocket("/ws/ui-updates")
 async def websocket_endpoint(websocket: WebSocket):

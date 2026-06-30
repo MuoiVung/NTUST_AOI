@@ -136,6 +136,8 @@ class PostgresDatabase:
                     status VARCHAR(50) NOT NULL,
                     started_at TIMESTAMP,
                     position_reached_at TIMESTAMP,
+                    capture_auth_at TIMESTAMP,
+                    capture_window_at TIMESTAMP,
                     capture_done_at TIMESTAMP,
                     completed_at TIMESTAMP,
                     error_code INTEGER,
@@ -148,6 +150,8 @@ class PostgresDatabase:
                 try:
                     cur.execute("ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_latest BOOLEAN DEFAULT TRUE")
                     cur.execute("CREATE INDEX IF NOT EXISTS idx_runs_sn_latest ON runs(serial_number, is_latest)")
+                    cur.execute("ALTER TABLE run_steps ADD COLUMN IF NOT EXISTS capture_auth_at TIMESTAMP")
+                    cur.execute("ALTER TABLE run_steps ADD COLUMN IF NOT EXISTS capture_window_at TIMESTAMP")
                 except Exception as e:
                     print(f"[DB] Migration notice: {e}")
                 
@@ -275,9 +279,23 @@ class PostgresDatabase:
             print(f"[DB] Error invalidating previous runs for SN {sn}: {e}")
         return deleted_runs
 
-    def create_step(self, run_code: str, step_info: StepInfo) -> int:
-        # PostgreSQL schema doesn't use run_steps currently
-        return step_info.step_index
+    def create_step(self, run_code: str, step_info: Any) -> int:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO run_steps (run_number, step_index, row_idx, col_idx, target_x_mm, target_y_mm, status, started_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    RETURNING step_id
+                    """,
+                    (run_code, step_info.step_index, step_info.row_idx, step_info.col_idx,
+                     step_info.target_x_mm, step_info.target_y_mm, "PENDING")
+                )
+                row = cur.fetchone()
+                return row[0] if row else -1
+        except Exception as e:
+            print(f"[DB] Error creating step: {e}")
+            return -1
 
     def update_system_config(self, key: str, value: str) -> None:
         try:
@@ -298,6 +316,7 @@ class PostgresDatabase:
         try:
             import json
             with self.conn.cursor() as cur:
+                cur.execute("UPDATE run_steps SET status = %s WHERE step_id = %s", (status, step_id))
                 payload = json.dumps({"type": "step_status", "step_id": step_id, "step_index": step_index, "status": status})
                 cur.execute(f"NOTIFY ui_update, '{payload}'")
         except Exception as e:

@@ -67,6 +67,8 @@ CREATE TABLE run_steps (
     status VARCHAR(50) NOT NULL,
     started_at TIMESTAMP,
     position_reached_at TIMESTAMP,
+    capture_auth_at TIMESTAMP,
+    capture_window_at TIMESTAMP,
     capture_done_at TIMESTAMP,
     completed_at TIMESTAMP,
     error_code INTEGER,

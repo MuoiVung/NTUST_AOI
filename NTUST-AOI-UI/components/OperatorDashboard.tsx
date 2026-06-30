@@ -119,7 +119,8 @@ export function OperatorDashboard() {
 
         const connect = () => {
             if (!alive) return;
-            ws = new WebSocket('ws://localhost:8000/ws/ui-updates');
+            const wsHost = window.location.hostname || 'localhost';
+            ws = new WebSocket(`ws://${wsHost}:8000/ws/ui-updates`);
 
             ws.onmessage = (event) => {
                 try {
@@ -132,14 +133,19 @@ export function OperatorDashboard() {
                         const eventName = data.event_name || "";
 
                         let activeStepId = 0;
-                        if (state === "PC_SEMI_SELECT" || state === "PC_SEMI_START_RUN") activeStepId = 1;
-                        if (eventName === "RECIPE_DOWNLOAD_START" || state === "PC_SEMI_DOWNLOAD_RECIPE" || eventName === "RECIPE_LOADED") {
+                        if (state === "PC_SEMI_SELECT") activeStepId = 1;
+                        if (state === "PC_SEMI_START_RUN" || eventName === "RECIPE_DOWNLOAD_START" || eventName === "RECIPE_LOADED") {
                             activeStepId = 2;
                             if (eventName === "RECIPE_DOWNLOAD_START" && data.payload_json && data.payload_json.length > 0) {
                                 setTotalPoints(data.payload_json[0]);
                             }
                         }
                         if (state === "PC_SEMI_MONITOR_RUN" || 
+                            state === "PC_SEMI_CHECK_CAPTURE_READY" ||
+                            state === "PC_SEMI_AUTHORIZE_CAPTURE" ||
+                            state === "PC_SEMI_WAIT_CAPTURE_WINDOW" ||
+                            state === "PC_SEMI_CAPTURE_IMAGE" ||
+                            state === "PC_SEMI_REPORT_CAPTURE_DONE" ||
                             ["SEMI_AUTO_STEP_STARTED", "POSITION_REACHED", "CAPTURE_AUTH_REQUEST", "CAPTURE_WINDOW_OPEN", "CAPTURE_DONE", "STEP_COMPLETE"].includes(eventName)) {
                             activeStepId = 3;
                         }
