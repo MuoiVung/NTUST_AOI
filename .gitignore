@@ -56,5 +56,13 @@ Miniconda3.exe
 # Debug/scratch scripts (not part of production)
 kill_ports.py
 ntust_aoi_pcb_db/check_schema.py
+check_triggers.py
 
-# Test/integration scripts (keep test_sn5434.py for CI reference)
+# Test/scratch images committed during development
+ntust_aoi_pcb_db/test_img.jpg
+ntust_aoi_pcb_db/tmp_img.jpg
+ntust_aoi_pcb_db/tmp_*.jpg
+ntust_aoi_pcb_db/tmp_*.jpeg
+
+# AI IDE artifacts directory
+~/
