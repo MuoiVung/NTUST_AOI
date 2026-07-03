@@ -2,50 +2,88 @@
 
 Hello fellow AI Agent! When you are spawned into this repository, please read these rules before taking any action. This will save your context window tokens and prevent you from breaking the delicate hardware-software interactions.
 
-## 0. Prerequisite Skills (Superpowers & Agency Agents)
-**CRITICAL:** This repository relies on advanced AI skills (like `agency-technical-writer`, `agency-backend-architect`, `superpowers`, etc.) from the `agency-agents` repository.
-- Check if you have these skills loaded in your `<skills>` block.
-- If you do NOT have them, immediately inform the user and suggest they run the following command to download them to their global config:
-  `git clone https://github.com/msitarzewski/agency-agents ~/.gemini/config/skills/agency-agents`
-  `git clone https://github.com/obra/superpowers ~/.gemini/config/skills/superpowers`
-- **Important:** When the user downloads the `agency-agents` repo, it contains over 200 agents. However, the AI will automatically read the `.agents/skills.json` file in this workspace to aggressively filter out the irrelevant ones. The AI on the new machine will NOT crash from token limits!
-- Once installed, you will have the superpower framework to handle complex, multi-agent tasks.
+## 0. Environment Setup & Dependency Management (CRITICAL)
 
-## 1. Project Architecture (Token Saver)
-Instead of searching the entire workspace, here is where everything lives:
-- **`NTUST-AOI-UI/`**: The React/Vite frontend. It uses TailwindCSS and WebSocket hooks to receive real-time database updates.
-- **`ntust_aoi_pcb_db/`**: The FastAPI Backend and PostgreSQL database configurations.
-  - `api/main.py`: The FastAPI server. **Do NOT modify database records manually here**, use the `DatabaseManager`.
-  - `docker-compose.yml`: Spawns Postgres (port 5433 mapped to 5432 internally).
-- **`machine_control/`**: The core logic running on the industrial PC.
-  - `pc_controller.py`: The brain. It connects to the PLC and the cameras. It POSTs images directly to the FastAPI backend.
+When you first interact with this codebase or need to run Python scripts, you MUST use the `aoi_env` conda environment.
+
+- **Activating the Environment**: Always ensure you are running scripts within the conda environment. Run `conda activate aoi_env` before executing any Python files.
+- **Installing Dependencies**: If you need to install new libraries or update existing ones, do so ONLY inside the `aoi_env` environment (e.g., `conda install <package>` or `pip install <package>` while the environment is active). Do not install dependencies globally.
+- **Creating the Environment (If missing)**: If the environment doesn't exist, create it using Python 3.10+: `conda create -n aoi_env python=3.10 -y` and then activate it to install requirements from `ntust_aoi_pcb_db/requirements.txt` or `requirements.txt`.
+
+## 1. Project Architecture & Module Structure
+
+The project is split into distinct modules to separate hardware logic from the web interface.
+
+### `NTUST-AOI-UI/` (Frontend)
+- **Tech Stack**: React 19, Vite, TypeScript, Recharts.
+- **Purpose**: The Real-time React Dashboard for operators. It uses WebSockets/HTTP polling to receive database updates.
+- **Key Files**:
+  - `package.json`: Contains Vite and React dependencies.
+  - `src/App.tsx` (or similar): Main dashboard layout.
+
+### `ntust_aoi_pcb_db/` (Backend & Database)
+- **Tech Stack**: Python 3.10+, FastAPI, Uvicorn, PostgreSQL, Docker.
+- **Purpose**: Central data storage and API gateway. Receives images from the machine and serves them to the UI.
+- **Key Files**:
+  - `api/main.py`: The FastAPI server. **Do NOT modify database records manually here**, use the appropriate DatabaseManager.
+  - `docker-compose.yml`: Spawns PostgreSQL (port 5433 mapped to 5432 internally).
+  - `requirements.txt`: Backend dependencies (`fastapi`, `psycopg2-binary`, `pydantic`).
+
+### `machine_control/` (Hardware Integration)
+- **Tech Stack**: Python (Strictly Sync/Blocking).
+- **Purpose**: The core logic running on the industrial PC. Connects to the Mitsubishi FX5U PLC and cameras.
+- **Key Files**:
+  - `pc_controller.py`: The brain. POSTs images directly to the FastAPI backend.
   - `recipe.py`: Generates the dynamic inspection grid (Rows x Cols) based on physical PCB dimensions.
-- **`simulation/`**: Mock environments for testing without hardware.
-  - `plc_sim.py`: Simulates the FX5U PLC via SLMP.
-  - `shopfloor_sim.py`: Simulates the factory MES API.
+  - `shared_protocol.py`: Defines the SLMP communication sequences.
+
+### `simulation/` (Mock Environments)
+- **Tech Stack**: Python, FastAPI.
+- **Purpose**: Allows software testing without physical industrial hardware.
+- **Key Files**:
+  - `plc_sim.py`: Simulates the Mitsubishi FX5U PLC via SLMP. Listens on port 15000.
+  - `shopfloor_sim.py`: Simulates the factory MES API. Runs on port 9090.
+
+---
 
 ## 2. Core Architectural Rules (CRITICAL)
 
 ### Do Not Break the Async/Sync Boundaries
-- The FastAPI backend is highly asynchronous.
+- The FastAPI backend (`ntust_aoi_pcb_db/`) is highly asynchronous. Use `async def` and `await`.
 - The `pc_controller.py` uses blocking threads for the PLC (SLMP protocol) because industrial hardware requires strict sequential execution. **Do not refactor `pc_controller.py` into `asyncio`** unless explicitly requested, as it will break the SLMP timing.
 
 ### Hardware Communication (SLMP)
 - Communication with the Mitsubishi PLC is done via SLMP (MC Protocol).
-- The PLC relies on a strict Event/Sequence/ACK pattern. If the PC receives an Event (e.g., `POSITION_REACHED`), it **MUST** respond with an `ACK` matching the sequence number, or the PLC will halt forever. See `machine_control/shared_protocol.py` before modifying any PLC logic.
+- The PLC relies on a strict Event/Sequence/ACK pattern. If the PC receives an Event (e.g., `POSITION_REACHED`), it **MUST** respond with an `ACK` matching the sequence number, or the PLC will halt forever. Read `machine_control/shared_protocol.py` before modifying any PLC logic.
 
 ### Database Operations
-- We no longer use physical file watchers (`folder_monitor.py` is deprecated).
-- Images are captured by `pc_controller.py` and sent directly via `requests.post()` to `FASTAPI_URL` (`http://127.0.0.1:8000/images/`).
+- Images are captured by `pc_controller.py` and sent directly via `requests.post()` to `FASTAPI_URL` (typically `http://127.0.0.1:8000/images/`).
 - Do NOT hardcode API URLs. Always use `os.environ.get("FASTAPI_URL")`.
 
-## 3. Automation and Testing
-- To start the entire ecosystem locally without the PySide6 Desktop GUI, run:
-  ```bash
-  python headless_runner.py start
-  ```
-- To shut down the ecosystem and clean up Docker/Python processes, run:
-  ```bash
-  python headless_runner.py stop
-  ```
-- Use these commands to spin up the environment before running a `browser_subagent` to test the React UI.
+---
+
+## 3. Automation, Testing, and Run Commands
+
+The system relies on a unified runner script to manage all microservices.
+
+### Running the Entire System (Headless)
+To start the entire ecosystem locally without the PySide6 Desktop GUI (spins up Docker DB, FastAPI, React UI, and Simulators):
+```bash
+python headless_runner.py start
+```
+
+### Shutting Down the System
+To shut down the ecosystem and cleanly kill all Docker/Python/Node processes:
+```bash
+python headless_runner.py stop
+```
+
+### Running the Integration Test
+We have automated test scripts in the root directory. To run an end-to-end integration test (after starting the system):
+```bash
+python test_sn5434.py
+```
+*(This triggers a simulated scan of a PCB and runs it through the full inspection cycle).*
+
+### Testing the UI via AI
+Use the `headless_runner.py start` command to spin up the environment *before* running a `browser_subagent` to test the React UI on `http://localhost:3001`.
