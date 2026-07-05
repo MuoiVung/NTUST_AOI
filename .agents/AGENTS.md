@@ -51,9 +51,10 @@ Access points after `make start`:
 
 1. **`pc_controller.py` must stay synchronous.** SLMP protocol requires blocking ACK timing. No `asyncio` refactoring.
 2. **Every PLC event received must be ACK'd.** Missing ACK → PLC halts permanently.
-3. **No hardcoded URLs/credentials.** Always `os.environ.get("VAR_NAME")`.
+3. **No hardcoded URLs/credentials.** Always use `os.environ.get("VAR_NAME")`.
 4. **Conda env only.** `conda activate aoi_env` before any Python command.
 5. **Update module `README.md` when modifying a module's interface or constraints.**
+6. **SECURITY:** NEVER commit `.env` files or secrets (passwords, tokens, API keys) to the repository. Use `.env.example` as a template with placeholder values.
 
 ---
 

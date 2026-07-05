@@ -21,8 +21,9 @@ backend_error.log
 **/*.spec
 
 # Local env files
-**/*.local
-# **/.env (Removed to allow tracking)
+.env
+.env.*
+!.env.example
 
 # Database data
 **/postgres_data/
