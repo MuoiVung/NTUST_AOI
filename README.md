@@ -157,6 +157,7 @@ If you are deploying this system to the actual factory floor (connecting to the 
 For comprehensive technical details, please refer to the following documents:
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full technical architecture, tech stack, schema, protocols — read this first.
+- **[Database Schema](docs/reference/DATABASE_SCHEMA.md)**: Complete PostgreSQL schema with all 7 tables, triggers, NOTIFY channels, and API mapping.
 - **[System Workflows](docs/reference/WORKFLOWS.md)**: Sequence diagrams for operational states and inspection cycle.
 - **[Production Deployment](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md)**: Target production build plan (Windows Services + Electron).
 
