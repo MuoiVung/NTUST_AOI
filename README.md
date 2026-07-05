@@ -148,7 +148,7 @@ python headless_runner.py stop
 
 If you are deploying this system to the actual factory floor (connecting to the physical FX5U PLC and real GigE Cameras), please refer to our detailed step-by-step deployment guide:
 
-👉 [**Real Hardware Integration Guide**](docs/requirements/REAL_HARDWARE_INTEGRATION.md)
+👉 [**Real Hardware Integration Guide**](docs/deployment/REAL_HARDWARE_INTEGRATION.md)
 
 ---
 
@@ -156,8 +156,10 @@ If you are deploying this system to the actual factory floor (connecting to the 
 
 For comprehensive technical details, please refer to the following documents:
 
-- **[AI Codebase Map](AI_CODEBASE_MAP.md)**: A high-level directory map for AI indexing and token saving.
-- **[System Workflows](docs/EN/WORKFLOWS.md)**: Extended documentation on operational states.
-- **[Database Schema](docs/EN/DATABASE_SCHEMA.md)**: Documentation of the PostgreSQL tables and API endpoints.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full technical architecture, tech stack, schema, protocols — read this first.
+- **[AI Codebase Map](docs/AI_CODEBASE_MAP.md)**: High-level directory index for AI token efficiency.
+- **[System Workflows](docs/reference/WORKFLOWS.md)**: Extended documentation on operational states.
+- **[Database Schema](docs/reference/DATABASE_SCHEMA.md)**: PostgreSQL tables and API endpoint reference.
+- **[Production Deployment](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md)**: Target production build plan (Windows Services + Electron).
 
-*Note for AI Agents: Always read `.agents/AGENTS.md` before executing any refactoring tasks within this repository.*
+*Note for AI Agents: Always read `.agents/AGENTS.md` and `ARCHITECTURE.md` before executing any refactoring tasks within this repository.*

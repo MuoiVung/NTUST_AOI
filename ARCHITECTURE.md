@@ -93,12 +93,17 @@ NTUST_AOI/
 │   └── shared_protocol.py       # Mirror of machine_control/shared_protocol.py
 │
 ├── docs/
-│   ├── PRODUCTION_DEPLOYMENT_ARCHITECTURE.md  # Target production build plan
-│   └── requirements/
-│       └── REAL_HARDWARE_INTEGRATION.md       # Real PLC/camera setup guide
+│   ├── AI_CODEBASE_MAP.md               # High-level directory index (moved from root)
+│   ├── deployment/
+│   │   ├── PRODUCTION_DEPLOYMENT_ARCHITECTURE.md  # Target production build plan
+│   │   └── REAL_HARDWARE_INTEGRATION.md           # Real PLC/camera setup guide
+│   └── reference/
+│       ├── WORKFLOWS.md                 # Operational state documentation
+│       ├── DATABASE_SCHEMA.md           # DB table reference
+│       └── SETUP_GUIDE.md              # Manual setup instructions
 │
 └── .agents/
-    └── AGENTS.md                # Rules for AI agents working in this repo
+    └── AGENTS.md               # Rules for AI agents working in this repo
 ```
 
 ---
