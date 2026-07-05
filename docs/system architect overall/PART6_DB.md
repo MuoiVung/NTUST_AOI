@@ -442,7 +442,7 @@ Access the production traceability system through a lightweight HTTP GET request
 | ---------------- | -------------------------------------------------------------------------------------- |
 | Protocol         | HTTPS, encrypted secure transmission                                                   |
 | Method           | GET                                                                                    |
-| Base URL         | `https://tracking.aaeon.com.tw/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx` |
+| Base URL         | `https://tracking.example.com/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx` |
 | Endpoint purpose | Production tracking endpoint                                                           |
 
 The diagram on page 3 shows the basic flow:

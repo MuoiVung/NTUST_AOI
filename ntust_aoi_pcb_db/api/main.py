@@ -389,7 +389,7 @@ def start_machine_run(req: RunStartRequest):
             actual_qty = 0
             try:
                 # Use environment variable or fallback to mock
-                base_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx")
+                base_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/api/v1/shopfloor/info")
                 query = urllib.parse.urlencode({"sn": req.serial_number})
                 url = f"{base_url}?{query}"
                 req_api = urllib.request.Request(url)

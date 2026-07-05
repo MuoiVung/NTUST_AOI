@@ -18,8 +18,7 @@ from typing import Any, Optional
 
 
 DEFAULT_ENDPOINT = (
-    "https://tracking.aaeon.com.tw/ashx/WebAPI/Board/SerialTest/"
-    "HandlerGetSerialInfo.ashx"
+    "http://example.com/api/v1/shopfloor/info"
 )
 
 

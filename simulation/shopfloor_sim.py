@@ -43,7 +43,7 @@ MOCK_DATABASE = {
 def ping():
     return {"status": "ok"}
 
-@app.get("/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx")
+@app.get("/api/v1/shopfloor/info")
 def get_serial_info(sn: str = Query(..., description="Serial Number")):
     sn_stripped = sn.strip()
     

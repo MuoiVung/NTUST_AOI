@@ -27,7 +27,7 @@ def start_all():
     time.sleep(3)
     
     print("[RUNNER] Starting PC Controller (Machine Logic)...")
-    shopfloor_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx")
+    shopfloor_url = os.environ.get("SHOPFLOOR_API_URL", "http://127.0.0.1:9090/api/v1/shopfloor/info")
     proc_pc = subprocess.Popen([sys.executable, "pc_controller.py", "--mode", "semi-auto", "--api-mode", "real", "--api-endpoint", shopfloor_url], cwd=os.path.join(BASE_DIR, "machine_control"))
 
     pids = [proc_api.pid, proc_ui.pid, proc_plc.pid, proc_shop.pid, proc_pc.pid]

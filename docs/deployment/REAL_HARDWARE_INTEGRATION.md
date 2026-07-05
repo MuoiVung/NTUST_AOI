@@ -29,7 +29,7 @@ You must disable "Simulation Mode" and enable "Real Mode" by configuring environ
    FASTAPI_URL=http://127.0.0.1:8000
    
    # Point the Shopfloor API to the real factory MES server
-   SHOPFLOOR_API_URL=http://<MES_SERVER_IP>/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx
+   SHOPFLOOR_API_URL=http://<MES_SERVER_IP>/api/v1/shopfloor/info
    ```
 
 2. **Configure Camera Mode (`machine_control/pc_controller.py`):**

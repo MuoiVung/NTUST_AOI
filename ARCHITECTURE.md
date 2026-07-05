@@ -315,7 +315,7 @@ In real deployment, the physical camera SDK service (IDS, Basler, etc.) must imp
 When a barcode is scanned, `machine_control/serialtest_api_client.py` calls the factory MES REST API:
 
 ```
-GET https://<MES_HOST>/ashx/WebAPI/Board/SerialTest/HandlerGetSerialInfo.ashx?sn=<SERIAL>
+GET https://<MES_HOST>/api/v1/shopfloor/info?sn=<SERIAL>
 ```
 
 **Response fields used:**
