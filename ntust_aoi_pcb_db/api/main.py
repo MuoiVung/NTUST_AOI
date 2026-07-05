@@ -103,7 +103,12 @@ app = FastAPI(title="AOI API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -413,7 +418,7 @@ def start_machine_run(req: RunStartRequest):
 
             # Send asynchronous notification to PC Controller
             # Using psycopg2's NOTIFY functionality
-            cur.execute(f"NOTIFY new_run_sn, '{req.serial_number}';")
+            cur.execute("SELECT pg_notify('new_run_sn', %s)", (req.serial_number,))
             
             conn.commit()
             return {

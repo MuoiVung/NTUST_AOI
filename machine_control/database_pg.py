@@ -318,7 +318,7 @@ class PostgresDatabase:
             with self.conn.cursor() as cur:
                 cur.execute("UPDATE run_steps SET status = %s WHERE step_id = %s", (status, step_id))
                 payload = json.dumps({"type": "step_status", "step_id": step_id, "step_index": step_index, "status": status})
-                cur.execute(f"NOTIFY ui_update, '{payload}'")
+                cur.execute("SELECT pg_notify('ui_update', %s)", (payload,))
         except Exception as e:
             print(f"[DB] Error sending notify for step status: {e}")
 
@@ -338,7 +338,7 @@ class PostgresDatabase:
                     "mode": event_info.get("mode"),
                     "payload_json": event_info.get("payload_json")
                 })
-                cur.execute(f"NOTIFY ui_update, '{payload}'")
+                cur.execute("SELECT pg_notify('ui_update', %s)", (payload,))
         except Exception as e:
             print(f"[DB] Error sending notify for event: {e}")
 
@@ -351,7 +351,7 @@ class PostgresDatabase:
                     "error_code": error_info.get("error_code"), 
                     "error_message": error_info.get("error_message")
                 })
-                cur.execute(f"NOTIFY ui_update, '{payload}'")
+                cur.execute("SELECT pg_notify('ui_update', %s)", (payload,))
         except Exception as e:
             print(f"[DB] Error sending notify for error: {e}")
 
