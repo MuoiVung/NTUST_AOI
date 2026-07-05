@@ -157,9 +157,7 @@ If you are deploying this system to the actual factory floor (connecting to the 
 For comprehensive technical details, please refer to the following documents:
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full technical architecture, tech stack, schema, protocols — read this first.
-- **[AI Codebase Map](docs/AI_CODEBASE_MAP.md)**: High-level directory index for AI token efficiency.
-- **[System Workflows](docs/reference/WORKFLOWS.md)**: Extended documentation on operational states.
-- **[Database Schema](docs/reference/DATABASE_SCHEMA.md)**: PostgreSQL tables and API endpoint reference.
+- **[System Workflows](docs/reference/WORKFLOWS.md)**: Sequence diagrams for operational states and inspection cycle.
 - **[Production Deployment](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md)**: Target production build plan (Windows Services + Electron).
 
 *Note for AI Agents: Always read `.agents/AGENTS.md` and `ARCHITECTURE.md` before executing any refactoring tasks within this repository.*
