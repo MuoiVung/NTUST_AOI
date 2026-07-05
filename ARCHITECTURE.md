@@ -43,12 +43,15 @@ The **NTUST AOI (Automated Optical Inspection)** system is a full-stack industri
 
 ```
 NTUST_AOI/
+├── Makefile                     # Unified command interface (start, stop, test, check-*)
+├── PROGRESS.md                  # What's done, what's pending, changelog
+├── ARCHITECTURE.md              # This document — full technical reference
 ├── headless_runner.py           # CLI process manager (dev/CI)
 ├── launcher.py                  # PySide6 desktop process manager (dev GUI)
 ├── test_sn5434.py               # End-to-end integration test
-├── ARCHITECTURE.md              # This document
 │
 ├── machine_control/             # [MODULE 1] Hardware Interface Layer
+│   ├── README.md                # Module responsibilities, interfaces, constraints
 │   ├── pc_controller.py         # Central state machine & orchestrator (1026 lines)
 │   ├── shared_protocol.py       # SLMP event codes, D-register map, TCP client (568 lines)
 │   ├── camera_tcp.py            # TCP client for camera service (JSON protocol)
@@ -57,12 +60,12 @@ NTUST_AOI/
 │   └── serialtest_api_client.py # HTTP client for factory MES/SerialTest API
 │
 ├── ntust_aoi_pcb_db/            # [MODULE 2] Backend API & Database Layer
+│   ├── README.md                # Module responsibilities, interfaces, constraints
 │   ├── api/
 │   │   └── main.py              # FastAPI application (732 lines)
 │   ├── sql/
-│   │   └── init.sql             # PostgreSQL schema + triggers
+│   │   └── init.sql             # PostgreSQL schema + triggers (source of truth)
 │   ├── scripts/
-│   │   ├── pg_adapter.py        # psycopg2 query utilities
 │   │   ├── sync_to_server.py    # Push images to MinIO/NAS
 │   │   ├── reset_db.py          # Dev utility: truncate all tables
 │   │   └── generate_mock_data.py
@@ -71,6 +74,7 @@ NTUST_AOI/
 │   └── .env                     # Runtime environment variables
 │
 ├── NTUST-AOI-UI/                # [MODULE 3] Operator Dashboard (React)
+│   ├── README.md                # Module responsibilities, interfaces, constraints
 │   ├── App.tsx                  # Main router & layout
 │   ├── types.ts                 # Shared TypeScript interfaces
 │   ├── components/
@@ -87,6 +91,7 @@ NTUST_AOI/
 │   └── package.json
 │
 ├── simulation/                  # [MODULE 4] Hardware Simulators (dev/test only)
+│   ├── README.md                # Module responsibilities, switch-to-hardware guide
 │   ├── plc_sim.py               # Fake Mitsubishi FX5U PLC (SLMP TCP, Port 15000)
 │   ├── camera_sim.py            # Fake camera service (JSON TCP, Port 16000)
 │   ├── shopfloor_sim.py         # Fake factory MES REST API (Port 9090)
@@ -97,10 +102,11 @@ NTUST_AOI/
 │   │   ├── PRODUCTION_DEPLOYMENT_ARCHITECTURE.md  # Target production build plan
 │   │   └── REAL_HARDWARE_INTEGRATION.md           # Real PLC/camera setup guide
 │   └── reference/
+│       ├── DATABASE_SCHEMA.md           # Full PostgreSQL schema reference
 │       └── WORKFLOWS.md                 # Operational state sequence diagrams
 │
 └── .agents/
-    └── AGENTS.md               # Rules for AI agents working in this repo
+    └── AGENTS.md               # AI agent landing page (what/how-to-run/how-to-verify)
 ```
 
 ---
