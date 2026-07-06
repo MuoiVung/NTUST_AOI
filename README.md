@@ -102,51 +102,82 @@ sequenceDiagram
 
 ## 🚀 Quick Start (Local Simulation)
 
-You can run the entire system on a standard PC without any industrial hardware. The system includes built-in simulators for both the PLC and the factory MES.
+You can run the entire system on a standard PC without any industrial hardware.
+The system includes built-in simulators for the PLC and the factory MES.
 
 ### Prerequisites
-1. **Python 3.10+**
+1. **Conda environment `aoi_env`** — Python 3.10+
 2. **Node.js 18+**
-3. **Docker Desktop** (Required for PostgreSQL)
+3. **Docker Desktop** (required for PostgreSQL)
 
-### Step 1: Install Dependencies
+### Step 1: Set Up Environment
 ```bash
-# Install Python backend dependencies
-pip install -r requirements.txt
-
-# Install React frontend dependencies
-cd NTUST-AOI-UI
-npm install
-cd ..
+conda activate aoi_env
+make setup                    # Installs Python + Node dependencies
 ```
 
-### Step 2: Start the System
-You can start the entire stack (Database, API, Frontend, and PC Controller) using the headless runner:
+### Step 2: Configure Environment
 ```bash
-python headless_runner.py start
+cp .env.example .env          # Then edit .env with your values
 ```
 
-### Step 3: Add Mock Images (Optional but Recommended)
-During a simulated run, the system will randomly select PCB images to act as the camera output.
-1. Create a folder named `mock_images` in the root directory.
-2. Place a few `.jpg` or `.png` images inside it.
-3. If this folder is empty or missing, the system will generate fake placeholder image files instead.
-
-### Step 4: Access the Dashboard
-Open your browser and navigate to: **http://localhost:3001**
-
-Input a mock Serial Number (e.g., `SN24_TEST`) to initiate a simulated inspection run.
-
-To shut down the system and clean up background processes, run:
+### Step 3: Start the System
 ```bash
-python headless_runner.py stop
+make start                    # Starts DB + API + UI + all simulators
+```
+
+Internally calls `python headless_runner.py start`.
+
+### Step 4: Add Mock Images (Optional but Recommended)
+During a simulated run, the system selects PCB images from `mock_images/` as camera output.
+Create the folder and place a few `.jpg` or `.png` images inside it.
+If empty or missing, the system generates placeholder files automatically.
+
+### Step 5: Access the Dashboard
+Open your browser: **http://localhost:3001**
+
+Input a mock Serial Number (e.g., `SN24_TEST`) to start a simulated inspection run.
+
+### Stop the System
+```bash
+make stop                     # Stops all services cleanly
+```
+
+---
+
+## 🛠️ Makefile Command Reference
+
+```bash
+make help           # Show all available commands
+make setup          # Install all dependencies (first time)
+make start          # Start full system
+make stop           # Stop all services
+make restart        # Stop + start
+make test           # Run E2E integration test (system must be running)
+make check-api      # Quick API health check
+make check-db       # Test PostgreSQL connection (reads from .env)
+make check-ui       # Test React UI is responding
+make db-up          # Start Docker containers only (DB + pgAdmin + Nginx)
+make db-down        # Stop Docker containers
+make db-reset       # Truncate all tables (dev only — DANGER)
+make db-mock        # Seed database with mock data
+make api            # Start FastAPI only
+make ui-dev         # Start React dev server only
+make plc-sim        # Start PLC simulator only
+make camera-sim     # Start camera simulator only
+make controller     # Start PC controller only
+make update-docs    # Show which docs need updating based on git changes
+make git-check      # Pre-work safety check (branch, status, conflicts)
+make lint-py        # Run flake8 on Python modules
+make ui-build       # Build React UI for production
 ```
 
 ---
 
 ## 🏭 Industrial Deployment
 
-If you are deploying this system to the actual factory floor (connecting to the physical FX5U PLC and real GigE Cameras), please refer to our detailed step-by-step deployment guide:
+If you are deploying to the actual factory floor (physical FX5U PLC and GigE cameras),
+refer to the hardware switchover guide:
 
 👉 [**Real Hardware Integration Guide**](docs/deployment/REAL_HARDWARE_INTEGRATION.md)
 
@@ -154,11 +185,15 @@ If you are deploying this system to the actual factory floor (connecting to the 
 
 ## 📂 Documentation & AI Onboarding
 
-For comprehensive technical details, please refer to the following documents:
+| Document | Purpose |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System overview, topology, routing to module docs |
+| [machine_control/ARCHITECTURE.md](machine_control/ARCHITECTURE.md) | PLC protocol, camera protocol, MES integration |
+| [ntust_aoi_pcb_db/ARCHITECTURE.md](ntust_aoi_pcb_db/ARCHITECTURE.md) | DB schema, real-time pipeline, API endpoints |
+| [NTUST-AOI-UI/ARCHITECTURE.md](NTUST-AOI-UI/ARCHITECTURE.md) | Component tree, WebSocket flow |
+| [docs/reference/DATABASE_SCHEMA.md](docs/reference/DATABASE_SCHEMA.md) | Full PostgreSQL column-level schema |
+| [docs/reference/WORKFLOWS.md](docs/reference/WORKFLOWS.md) | Operational state sequence diagrams |
+| [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) | Branch naming, merge conflict protocol |
+| [docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md) | Production build plan |
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Full technical architecture, tech stack, schema, protocols — read this first.
-- **[Database Schema](docs/reference/DATABASE_SCHEMA.md)**: Complete PostgreSQL schema with all 7 tables, triggers, NOTIFY channels, and API mapping.
-- **[System Workflows](docs/reference/WORKFLOWS.md)**: Sequence diagrams for operational states and inspection cycle.
-- **[Production Deployment](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md)**: Target production build plan (Windows Services + Electron).
-
-*Note for AI Agents: Always read `.agents/AGENTS.md` and `ARCHITECTURE.md` before executing any refactoring tasks within this repository.*
+*AI Agents: Read `.agents/AGENTS.md` first. It contains all constraints and routing links.*
