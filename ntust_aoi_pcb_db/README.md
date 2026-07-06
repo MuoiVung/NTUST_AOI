@@ -16,7 +16,7 @@ This module is the **backend API and database layer**. It is the central hub tha
 | `scripts/sync_to_server.py` | Background script: polls for `is_uploaded_longterm = FALSE`, uploads to MinIO/NAS, updates DB. |
 | `scripts/reset_db.py` | Dev utility: truncates all tables. **Never run in production.** |
 | `scripts/generate_mock_data.py` | Dev utility: seeds fake runs and images for UI development. |
-| `docker-compose.yml` | Dev infrastructure: PostgreSQL 18 (port 5433), pgAdmin (5050), Nginx image server (8080). |
+
 | `.env` | Runtime configuration. See Environment Variables section below. |
 | `requirements.txt` | Python dependencies for this module. |
 
@@ -58,11 +58,8 @@ Full schema: [`docs/reference/DATABASE_SCHEMA.md`](../docs/reference/DATABASE_SC
 
 ```bash
 conda activate aoi_env
-# Start PostgreSQL first
-cd ntust_aoi_pcb_db
-docker compose up -d
-
-# Start FastAPI
+# 1. Start PostgreSQL Native Service manually (e.g. via Windows Services)
+# 2. Start FastAPI
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 

@@ -11,7 +11,7 @@
 ### Backend & Database
 - [x] **`ntust_aoi_pcb_db/api/main.py`** — Full FastAPI application: REST endpoints, WebSocket, PG NOTIFY listener
 - [x] **`ntust_aoi_pcb_db/sql/init.sql`** — PostgreSQL schema: 7 tables + indexes + `increment_order_quantity` trigger
-- [x] **`ntust_aoi_pcb_db/docker-compose.yml`** — PostgreSQL 18, pgAdmin 4, Nginx image server
+
 - [x] **`ntust_aoi_pcb_db/scripts/sync_to_server.py`** — Background sync images to MinIO/NAS
 - [x] **Real-time WebSocket pipeline** — Camera → FastAPI → PG NOTIFY → WebSocket → React UI
 
@@ -59,7 +59,7 @@
 ### Production Build (Deployment)
 > See details: [`docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md`](docs/deployment/PRODUCTION_DEPLOYMENT_ARCHITECTURE.md)
 
-- [ ] **Phase 1: Remove Docker** — Install native PostgreSQL on Windows IPC, remove docker-compose dependency
+- [x] **Phase 1: Remove Docker** — Install native PostgreSQL on Windows IPC, remove docker-compose dependency
 - [ ] **Phase 2: Build Core Engine** — PyInstaller build `api/main.py` + `pc_controller.py` into `.exe`
 - [ ] **Phase 3: Windows Services** — Use NSSM to register `.exe` as Windows Services (auto-start)
 - [ ] **Phase 4: Engineer Tool** — Refactor `launcher.py` → `AOI_ConfigTool.exe` (Stop/Restart services + Log viewer + Settings)
@@ -76,6 +76,7 @@
 
 | Date | Changes |
 |---|---|
+| 2026-07-06 | Removed Docker dependencies (docker-compose) to support native macOS and Windows execution |
 | 2026-07-05 | Translated `PROGRESS.md` into English |
 | 2026-07-05 | Created `ARCHITECTURE.md`, `DATABASE_SCHEMA.md`, `PROGRESS.md`, `Makefile`, 4 module READMEs |
 | 2026-07-05 | Restructured `docs/` into `deployment/` and `reference/`, removed 3 outdated files |

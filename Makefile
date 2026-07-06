@@ -5,7 +5,7 @@
 ##
 
 .PHONY: help setup install start stop restart test check-api \
-        db-up db-down db-reset db-mock db-check \
+        db-reset db-mock db-check \
         api ui-dev plc-sim camera-sim shopfloor-sim controller \
         ui-build lint-py update-docs git-check check-db check-ui
 
@@ -28,22 +28,17 @@ install: ## Install all Python and Node dependencies
 
 ## ─── System Lifecycle ────────────────────────────────────────────────────────
 
-start: ## Start full system: DB (Docker) + FastAPI + React UI + all simulators
+start: ## Start full system: FastAPI + React UI + all simulators
 	python headless_runner.py start
 
-stop: ## Stop all services cleanly (Docker, Python, Node processes)
+stop: ## Stop all services cleanly (Python, Node processes)
 	python headless_runner.py stop
 
 restart: stop start ## Stop then restart all services
 
 ## ─── Database ────────────────────────────────────────────────────────────────
 
-db-up: ## Start PostgreSQL + pgAdmin + Nginx (Docker only)
-	cd ntust_aoi_pcb_db && docker compose up -d
-	@echo "PostgreSQL: localhost:5433 | pgAdmin: http://localhost:5050 | Nginx: http://localhost:8080"
 
-db-down: ## Stop and remove Docker containers
-	cd ntust_aoi_pcb_db && docker compose down
 
 db-reset: ## DANGER: Truncate all database tables (dev only)
 	@echo "WARNING: This will delete all data. Press Ctrl+C to abort, or Enter to continue."
@@ -133,9 +128,7 @@ update-docs: ## Show which docs need updating based on current git changes (run 
 	  && echo "  → simulation/ARCHITECTURE.md" || true
 	@git diff --name-only HEAD 2>/dev/null | grep -q "Makefile" \
 	  && echo "  → README.md (Makefile command reference table)" || true
-	@git diff --name-only HEAD 2>/dev/null | grep -q "docker-compose.yml" \
-	  && echo "  → ntust_aoi_pcb_db/README.md" \
-	  && echo "  → ARCHITECTURE.md" || true
+
 	@echo "  → PROGRESS.md (always — if a new feature or fix was added)"
 	@echo ""
 	@echo "  NOTE: docs/system architect overall/ is HUMAN-ONLY. Never edit with AI."

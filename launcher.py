@@ -36,7 +36,7 @@ UI_DIR = os.path.join(BASE_DIR, "NTUST-AOI-UI")
 
 PYTHON_EXE = getattr(sys, "executable", shutil.which("python") or shutil.which("python3") or "python")
 NPM_EXE = shutil.which("npm") or (r"C:\Program Files\nodejs\npm.cmd" if IS_WINDOWS else "npm")
-DOCKER_EXE = shutil.which("docker") or "docker"
+
 
 # ─── STYLE ────────────────────────────────────────────────────────────────────
 DARK_THEME_QSS = """
@@ -106,7 +106,7 @@ QTextEdit {
 """
 
 SERVICES_DEF = [
-    ("docker", "🐳 Docker", "Manage DB & Nginx"),
+
     ("backend", "⚡ API", "FastAPI Port 8000"),
     ("machine", "⚙️ PLC", "Core Machine Logic"),
     ("monitor", "📷 Camera", "Folder Monitor"),
@@ -402,9 +402,7 @@ class LauncherApp(QMainWindow):
         running_count = 0
         
         # Naive check by ports
-        if port_open(5433):
-            self.cards["docker"].set_status("ok", "Already running")
-            running_count += 1
+
         if port_open(8000):
             self.cards["backend"].set_status("ok", "Already running")
             running_count += 1
@@ -433,20 +431,12 @@ class LauncherApp(QMainWindow):
         
         self.log_msg("Starting all services...", "system")
         
-        # 1. Docker
-        self.cards["docker"].set_status("running")
-        self.log_msg("Running docker-compose up -d...", "docker")
-        proc_doc = self._create_process("docker")
-        proc_doc.setWorkingDirectory(DB_DIR)
-        proc_doc.start(DOCKER_EXE, ["compose", "up", "-d"])
-        self.processes["docker"] = proc_doc
-        
-        # We use a timer to wait for docker to finish before starting others 
+        # We use a timer to wait briefly before starting others 
         # (in a real app we'd chain them, but here we'll just delay a bit for visual)
-        QTimer.singleShot(2000, self.start_backend_and_scripts)
+        QTimer.singleShot(500, self.start_backend_and_scripts)
 
     def start_backend_and_scripts(self):
-        self.cards["docker"].set_status("ok")
+
         
         # 2. FastAPI
         if not port_open(8000):
@@ -528,7 +518,7 @@ class LauncherApp(QMainWindow):
         
         # Terminate QProcesses
         for key, proc in self.processes.items():
-            if key != "docker" and proc.state() != QProcess.NotRunning:
+            if proc.state() != QProcess.NotRunning:
                 if key in self.cards:
                     self.cards[key].set_status("running", "Stopping...")
                 proc.terminate()
@@ -537,19 +527,7 @@ class LauncherApp(QMainWindow):
                 if key in self.cards:
                     self.cards[key].set_status("idle", "Stopped")
         
-        # Stop Docker without freezing UI completely
-        self.cards["docker"].set_status("running", "Stopping...")
-        self.log_msg("Running docker-compose down...", "docker")
-        
-        proc_doc = self._create_process("docker")
-        proc_doc.setWorkingDirectory(DB_DIR)
-        proc_doc.start(DOCKER_EXE, ["compose", "down"])
-        
-        # Wait asynchronously to avoid UI freeze
-        while not proc_doc.waitForFinished(100):
-            QApplication.processEvents()
-            
-        self.cards["docker"].set_status("idle", "Stopped")
+
         
         self.processes.clear()
         self.log_msg("All services stopped successfully.", "system")

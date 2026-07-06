@@ -7,8 +7,7 @@ PID_FILE = "headless_runner.pids"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def start_all():
-    print("[RUNNER] Starting Docker Compose (PostgreSQL)...")
-    subprocess.run(["docker-compose", "up", "-d"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"), shell=True)
+
     
     print("[RUNNER] Starting FastAPI Backend (Port 8000)...")
     proc_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"))
@@ -74,8 +73,7 @@ def stop_all():
         subprocess.run("pkill -f 'plc_sim.py'", shell=True, stderr=subprocess.DEVNULL)
         subprocess.run("pkill -f 'pc_controller.py'", shell=True, stderr=subprocess.DEVNULL)
 
-    print("[RUNNER] Stopping Docker Compose...")
-    subprocess.run(["docker-compose", "down"], cwd=os.path.join(BASE_DIR, "ntust_aoi_pcb_db"))
+
     print("[RUNNER] All services completely stopped and cleaned up!")
 
 if __name__ == "__main__":

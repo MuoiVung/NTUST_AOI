@@ -108,7 +108,7 @@ The system includes built-in simulators for the PLC and the factory MES.
 ### Prerequisites
 1. **Conda environment `aoi_env`** — Python 3.10+
 2. **Node.js 18+**
-3. **Docker Desktop** (required for PostgreSQL)
+3. **PostgreSQL 18** (Native installation via .exe on Windows or Homebrew on macOS)
 
 ### Step 1: Set Up Environment
 ```bash
@@ -116,24 +116,30 @@ conda activate aoi_env
 make setup                    # Installs Python + Node dependencies
 ```
 
-### Step 2: Configure Environment
+### Step 2: Database Setup
+1. Install PostgreSQL 18 natively on your machine and start the service.
+2. Open `psql` or pgAdmin.
+3. Create a user `admin` and a database `pcb_aoi_db`.
+4. Run the initialization script `ntust_aoi_pcb_db/sql/init.sql` to create tables.
+
+### Step 3: Configure Environment
 ```bash
-cp .env.example .env          # Then edit .env with your values
+cp .env.example .env          # Then edit .env with your DB credentials
 ```
 
-### Step 3: Start the System
+### Step 4: Start the System
 ```bash
-make start                    # Starts DB + API + UI + all simulators
+make start                    # Starts FastAPI + UI + all simulators
 ```
 
 Internally calls `python headless_runner.py start`.
 
-### Step 4: Add Mock Images (Optional but Recommended)
+### Step 5: Add Mock Images (Optional but Recommended)
 During a simulated run, the system selects PCB images from `mock_images/` as camera output.
 Create the folder and place a few `.jpg` or `.png` images inside it.
 If empty or missing, the system generates placeholder files automatically.
 
-### Step 5: Access the Dashboard
+### Step 6: Access the Dashboard
 Open your browser: **http://localhost:3001**
 
 Input a mock Serial Number (e.g., `SN24_TEST`) to start a simulated inspection run.
@@ -157,8 +163,7 @@ make test           # Run E2E integration test (system must be running)
 make check-api      # Quick API health check
 make check-db       # Test PostgreSQL connection (reads from .env)
 make check-ui       # Test React UI is responding
-make db-up          # Start Docker containers only (DB + pgAdmin + Nginx)
-make db-down        # Stop Docker containers
+
 make db-reset       # Truncate all tables (dev only — DANGER)
 make db-mock        # Seed database with mock data
 make api            # Start FastAPI only

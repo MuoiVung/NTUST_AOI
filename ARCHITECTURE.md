@@ -65,7 +65,7 @@ NTUST_AOI/
 │   ├── api/main.py              # FastAPI application
 │   ├── sql/init.sql             # PostgreSQL schema (source of truth)
 │   ├── scripts/                 # DB utilities (sync, reset, mock data)
-│   └── docker-compose.yml       # PostgreSQL + pgAdmin + Nginx containers
+
 │
 ├── NTUST-AOI-UI/                # [MODULE 3] Operator Dashboard (React)
 │   ├── README.md                # Responsibility, interfaces, how to run
@@ -96,7 +96,7 @@ NTUST_AOI/
 | `ntust_aoi_pcb_db/` | Python 3.10 (async) | FastAPI, psycopg2 pool, PG NOTIFY, MinIO |
 | `NTUST-AOI-UI/` | TypeScript | React 19, Vite 6, Recharts, native WebSocket |
 | `simulation/` | Python 3.10 | FastAPI (shopfloor), raw TCP (PLC/camera) |
-| Infrastructure | — | PostgreSQL 18, Docker Compose, Nginx, Conda |
+| Infrastructure | — | PostgreSQL 18 (Native), Conda |
 
 ---
 
