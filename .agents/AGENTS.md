@@ -29,7 +29,7 @@ Access points after start:
 Before writing code:
 
 1. Confirm the working directory with `pwd`.
-2. Read `PROGRESS.md` for the latest verified state and next step.
+2. Read `.agents/PROGRESS.md` for the latest verified state and next step.
 3. Read `.agents/feature_list.json` and choose the highest-priority unfinished feature.
 4. Review recent commits with `git log --oneline -5`.
 5. Run `python init.py`.
@@ -87,7 +87,7 @@ feature work on top of a broken starting state.
 ## Required Artifacts
 
 - `.agents/feature_list.json`: source of truth for feature state
-- `PROGRESS.md`: session log and current verified status
+- `.agents/PROGRESS.md`: session log and current verified status
 - `init.py`: standard startup and verification path
 - `.agents/session-handoff.md`: optional compact handoff for larger sessions
 
@@ -97,14 +97,14 @@ A feature is done only when all of the following are true:
 
 - the target behavior is implemented
 - the required verification actually ran
-- evidence is recorded in `.agents/feature_list.json` or `PROGRESS.md`
+- evidence is recorded in `.agents/feature_list.json` or `.agents/PROGRESS.md`
 - the repository remains restartable from the standard startup path
 
 ## End Of Session
 
 Before ending a session:
 
-1. Update `PROGRESS.md`.
+1. Update `.agents/PROGRESS.md`.
 2. Update `.agents/feature_list.json`.
 3. Record any unresolved risk or blocker.
 4. Commit with a descriptive message once the work is in a safe state.

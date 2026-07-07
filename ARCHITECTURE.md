@@ -49,7 +49,7 @@ hardware (Mitsubishi FX5U PLC, dual-camera array) with a modern software stack
 NTUST_AOI/
 ├── Makefile                     # Unified command interface — use this first
 ├── README.md                    # Project overview and Quick Start
-├── PROGRESS.md                  # What's done, what's pending, changelog
+├── .agents/PROGRESS.md          # Session logs and current verified state
 ├── ARCHITECTURE.md              # This document — system overview and routing
 ├── headless_runner.py           # Underlying process manager (used by Makefile)
 ├── launcher.py                  # PySide6 desktop process manager (dev GUI)

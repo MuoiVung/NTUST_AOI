@@ -80,7 +80,7 @@ def cmd_update_docs():
             print("  → README.md (tasks.py command reference table)")
     except Exception:
         pass
-    print("  → PROGRESS.md (always — if a new feature or fix was added)")
+    print("  → .agents/PROGRESS.md (always — if a new feature or fix was added)")
     print("\n  NOTE: docs/system architect overall/ is HUMAN-ONLY. Never edit with AI.")
 
 TASKS = {
