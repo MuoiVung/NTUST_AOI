@@ -42,10 +42,10 @@ def cmd_git_check():
         print("  unknown")
     
     print("\n==> Recent commits:")
-    subprocess.run(["git", "log", "--oneline", "-5"])
+    subprocess.run(["git", "--no-pager", "log", "--oneline", "-5"])
     
     print("\n==> Working tree status:")
-    subprocess.run(["git", "status", "--short"])
+    subprocess.run(["git", "--no-pager", "status", "--short"])
     
     print("\n==> Conflict markers (unresolved merges):")
     try:
@@ -54,7 +54,7 @@ def cmd_git_check():
             print("  ⛔ CONFLICTS DETECTED — human must resolve:")
             for line in conflicts.split('\n'):
                 print(f"    {line}")
-            subprocess.run(["git", "diff", "--diff-filter=U"])
+            subprocess.run(["git", "--no-pager", "diff", "--diff-filter=U"])
         else:
             print("  None found.")
     except Exception:
@@ -62,7 +62,7 @@ def cmd_git_check():
 
 def cmd_update_docs():
     print("==> Files changed since last commit:")
-    subprocess.run(["git", "diff", "--name-only", "HEAD"])
+    subprocess.run(["git", "--no-pager", "diff", "--name-only", "HEAD"])
     print("\n==> Documentation to update:")
     try:
         changed = subprocess.check_output(["git", "diff", "--name-only", "HEAD"], text=True)
