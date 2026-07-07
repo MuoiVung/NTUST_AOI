@@ -1,4 +1,8 @@
-# AGENTS.md — NTUST AOI
+# AGENTS.md
+
+This repository is designed for long-running coding-agent work. The goal is not
+to maximize raw code output. The goal is to leave the repo in a state where the
+next session can continue without guessing.
 
 ## Project Overview
 
@@ -6,32 +10,45 @@ An industrial **Automated Optical Inspection (AOI)** system for PCB quality cont
 on a factory floor. It connects a Mitsubishi FX5U PLC and dual-camera array to a
 FastAPI + PostgreSQL backend and a React operator dashboard.
 
----
-
 ## Quick Start
 
 ```bash
 conda activate aoi_env          # Always activate first
-make setup                      # Install all Python + Node dependencies (first time only)
-make start                      # Start full system (DB + API + UI + simulators)
-make test                       # Run end-to-end integration test (SN5434)
-make stop                       # Stop all services cleanly
+python init.py                  # Install dependencies and start the system
+python tasks.py test            # Run end-to-end integration test (SN5434)
+python tasks.py stop            # Stop all services cleanly
 ```
 
-Fallback if `make` unavailable: `python headless_runner.py start|stop`
-
-Access points after `make start`:
+Access points after start:
 - Operator UI: http://localhost:3001
 - API Swagger: http://localhost:8000/docs
 - pgAdmin: http://localhost:5050
 
----
+## Startup Workflow
 
-## Hard Constraints
+Before writing code:
 
+1. Confirm the working directory with `pwd`.
+2. Read `PROGRESS.md` for the latest verified state and next step.
+3. Read `.agents/feature_list.json` and choose the highest-priority unfinished feature.
+4. Review recent commits with `git log --oneline -5`.
+5. Run `python init.py`.
+6. Run the required smoke or end-to-end verification before starting new work.
+
+If baseline verification is already failing, fix that first. Do not stack new
+feature work on top of a broken starting state.
+
+## Working Rules
+
+- Work on one feature at a time.
+- Do not mark a feature complete just because code was added.
+- Keep changes within the selected feature scope unless a blocker forces a
+  narrow supporting fix.
+- Do not silently change verification rules during implementation.
+- Prefer durable repo artifacts over chat summaries.
+
+### Hard Constraints (NTUST AOI Specific)
 > These are non-negotiable. Do not bypass any of them.
-
-### Code
 
 1. **`pc_controller.py` must stay synchronous.** SLMP protocol requires blocking ACK
    timing. No `asyncio` refactoring — ever.
@@ -50,9 +67,7 @@ Access points after `make start`:
 5. **Never commit `.env` files or secrets.** Use `.env.example` as the template
    with placeholder values only.
 
-### Git Workflow
-
-6. **Pull before every session.** Run `git pull origin main` then `make git-check`
+6. **Pull before every session.** Run `git pull origin main` then `python tasks.py git-check`
    before making any changes. Never work on a stale checkout.
 
 7. **Never commit directly to `main`.** All changes go on a dedicated branch:
@@ -61,16 +76,40 @@ Access points after `make start`:
 8. **Human must resolve all merge conflicts.** When merging into `main`, if any
    conflict exists: stop, display full conflict diff, do NOT auto-resolve.
    A human must review and resolve each conflict manually.
-   *(See `docs/GIT_WORKFLOW.md` for the full conflict protocol.)*
 
-### Documentation
-
-9. **After modifying any source file, run `make update-docs`** and update all
+9. **After modifying any source file, run `python tasks.py update-docs`** and update all
    listed `.md` files before committing. Doc updates go in the same commit as
    the code change.
 
 10. **`docs/system architect overall/` is HUMAN-ONLY.** AI agents must never
     create, modify, or delete any file in that directory.
+
+## Required Artifacts
+
+- `.agents/feature_list.json`: source of truth for feature state
+- `PROGRESS.md`: session log and current verified status
+- `init.py`: standard startup and verification path
+- `.agents/session-handoff.md`: optional compact handoff for larger sessions
+
+## Definition Of Done
+
+A feature is done only when all of the following are true:
+
+- the target behavior is implemented
+- the required verification actually ran
+- evidence is recorded in `.agents/feature_list.json` or `PROGRESS.md`
+- the repository remains restartable from the standard startup path
+
+## End Of Session
+
+Before ending a session:
+
+1. Update `PROGRESS.md`.
+2. Update `.agents/feature_list.json`.
+3. Record any unresolved risk or blocker.
+4. Commit with a descriptive message once the work is in a safe state.
+5. Leave the repo clean enough for the next session to run `python init.py`
+   immediately.
 
 ---
 

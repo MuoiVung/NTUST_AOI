@@ -12,7 +12,7 @@ Run these before touching any file:
 
 ```bash
 git pull origin main      # Always start from latest main
-make git-check            # Verify branch, status, check for conflict markers
+python tasks.py git-check # Verify branch, status, check for conflict markers
 ```
 
 If `git-check` warns you are on `main`: stop and create a branch first.
@@ -43,7 +43,7 @@ git checkout -b refactor/camera-tcp-client
 ```
 1. git pull origin main
 2. git checkout -b <type>/<description>
-3. Make changes, run make update-docs
+3. Make changes, run `python tasks.py update-docs`
 4. git add . && git commit -m "<type>: <description>"
 5. git push origin <branch>
 6. Open PR / merge request for review

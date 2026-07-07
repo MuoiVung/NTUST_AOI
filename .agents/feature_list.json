@@ -1,0 +1,188 @@
+{
+  "project": "NTUST_AOI",
+  "last_updated": "2026-07-07",
+  "rules": {
+    "single_active_feature": true,
+    "passing_requires_evidence": true,
+    "do_not_skip_verification": true
+  },
+  "status_legend": {
+    "not_started": "Work has not begun.",
+    "in_progress": "The feature is the current active task.",
+    "blocked": "Work cannot continue until a documented blocker is resolved.",
+    "passing": "Required verification has passed and evidence is recorded."
+  },
+  "features": [
+    {
+      "id": "hw-001",
+      "priority": 1,
+      "area": "hardware",
+      "title": "Real Camera SDK",
+      "user_visible_behavior": "System receives images from real IDS/Basler camera instead of simulator.",
+      "status": "not_started",
+      "verification": [
+        "Connect real camera to the network.",
+        "Run the new real camera service.",
+        "Trigger a capture command and verify image is received over JSON-TCP interface."
+      ],
+      "evidence": [],
+      "notes": "Replaces simulation/camera_sim.py"
+    },
+    {
+      "id": "hw-002",
+      "priority": 2,
+      "area": "hardware",
+      "title": "Connect Real FX5U PLC",
+      "user_visible_behavior": "System communicates with physical PLC at its actual IP address.",
+      "status": "not_started",
+      "verification": [
+        "Set PLC IP in .env",
+        "Start pc_controller.py",
+        "Verify SLMP handshake and heartbeat with physical PLC."
+      ],
+      "evidence": [],
+      "notes": "Currently only tested with simulator."
+    },
+    {
+      "id": "hw-003",
+      "priority": 3,
+      "area": "hardware",
+      "title": "Calibration",
+      "user_visible_behavior": "System accurately maps PCB dimensions to physical XY table movement.",
+      "status": "not_started",
+      "verification": [
+        "Run calibration routine.",
+        "Verify fov_step_mm and margin_mm match physical measurements."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "ai-001",
+      "priority": 4,
+      "area": "ai",
+      "title": "AI Server interface",
+      "user_visible_behavior": "AI inference engine can update image status to PASS/FAIL.",
+      "status": "not_started",
+      "verification": [
+        "Simulate AI engine sending PUT /images/{id} with condition payload.",
+        "Verify database and UI update correctly."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "infra-001",
+      "priority": 5,
+      "area": "infrastructure",
+      "title": "Connect Real NAS/MinIO",
+      "user_visible_behavior": "Images are successfully synced to the physical NAS server.",
+      "status": "not_started",
+      "verification": [
+        "Configure MINIO_ENDPOINT.",
+        "Run sync_to_server.py.",
+        "Verify images appear in NAS storage."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "deploy-002",
+      "priority": 6,
+      "area": "deployment",
+      "title": "Phase 2: Build Core Engine",
+      "user_visible_behavior": "Backend services can run as compiled Windows executables.",
+      "status": "not_started",
+      "verification": [
+        "Run PyInstaller on api/main.py and pc_controller.py.",
+        "Verify .exe files run without Python installed."
+      ],
+      "evidence": [],
+      "notes": "Phase 1 is already complete."
+    },
+    {
+      "id": "deploy-003",
+      "priority": 7,
+      "area": "deployment",
+      "title": "Phase 3: Windows Services",
+      "user_visible_behavior": "Compiled .exe files run automatically on Windows startup.",
+      "status": "not_started",
+      "verification": [
+        "Register .exe using NSSM.",
+        "Restart Windows and verify services are running."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "deploy-004",
+      "priority": 8,
+      "area": "deployment",
+      "title": "Phase 4: Engineer Tool",
+      "user_visible_behavior": "Engineers use a compiled GUI to configure and restart services.",
+      "status": "not_started",
+      "verification": [
+        "Refactor launcher.py to AOI_ConfigTool.exe.",
+        "Verify GUI can stop/start services and view logs."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "deploy-005",
+      "priority": 9,
+      "area": "deployment",
+      "title": "Phase 5: Operator Dashboard",
+      "user_visible_behavior": "Operators launch a native desktop app for the React UI.",
+      "status": "not_started",
+      "verification": [
+        "Build React UI with Electron into AOI_Dashboard.exe.",
+        "Run .exe and verify UI connects to API."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "debt-001",
+      "priority": 10,
+      "area": "tech_debt",
+      "title": "Extract simulation/shared_protocol.py",
+      "user_visible_behavior": "Developers modify protocol in one place without manually copying.",
+      "status": "not_started",
+      "verification": [
+        "Move shared_protocol.py to a common package or use symlink.",
+        "Verify pc_controller and plc_sim still run."
+      ],
+      "evidence": [],
+      "notes": "Currently a manual copy."
+    },
+    {
+      "id": "debt-002",
+      "priority": 11,
+      "area": "tech_debt",
+      "title": "Identify disabled steps in launcher.py",
+      "user_visible_behavior": "Launcher has no dead code for disabled monitor cards.",
+      "status": "not_started",
+      "verification": [
+        "Review and either remove or re-enable the commented out 'monitor' card.",
+        "Verify launcher still opens."
+      ],
+      "evidence": [],
+      "notes": ""
+    },
+    {
+      "id": "debt-003",
+      "priority": 12,
+      "area": "tech_debt",
+      "title": "Fix /services/status endpoint",
+      "user_visible_behavior": "Status endpoint works cross-platform or is clearly documented as Windows-only.",
+      "status": "not_started",
+      "verification": [
+        "Refactor endpoint to use psutil instead of wmic, or add OS-checks.",
+        "Verify endpoint returns correct status."
+      ],
+      "evidence": [],
+      "notes": "Uses wmic which is Windows-only."
+    }
+  ]
+}

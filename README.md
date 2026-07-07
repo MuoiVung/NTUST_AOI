@@ -113,7 +113,7 @@ The system includes built-in simulators for the PLC and the factory MES.
 ### Step 1: Set Up Environment
 ```bash
 conda activate aoi_env
-make setup                    # Installs Python + Node dependencies
+python tasks.py setup         # Installs Python + Node dependencies
 ```
 
 ### Step 2: Database Setup
@@ -129,7 +129,7 @@ cp .env.example .env          # Then edit .env with your DB credentials
 
 ### Step 4: Start the System
 ```bash
-make start                    # Starts FastAPI + UI + all simulators
+python tasks.py start         # Starts FastAPI + UI + all simulators
 ```
 
 Internally calls `python headless_runner.py start`.
@@ -146,35 +146,21 @@ Input a mock Serial Number (e.g., `SN24_TEST`) to start a simulated inspection r
 
 ### Stop the System
 ```bash
-make stop                     # Stops all services cleanly
+python tasks.py stop          # Stops all services cleanly
 ```
 
 ---
 
-## 🛠️ Makefile Command Reference
+## 🛠️ Python Tasks Command Reference
 
 ```bash
-make help           # Show all available commands
-make setup          # Install all dependencies (first time)
-make start          # Start full system
-make stop           # Stop all services
-make restart        # Stop + start
-make test           # Run E2E integration test (system must be running)
-make check-api      # Quick API health check
-make check-db       # Test PostgreSQL connection (reads from .env)
-make check-ui       # Test React UI is responding
-
-make db-reset       # Truncate all tables (dev only — DANGER)
-make db-mock        # Seed database with mock data
-make api            # Start FastAPI only
-make ui-dev         # Start React dev server only
-make plc-sim        # Start PLC simulator only
-make camera-sim     # Start camera simulator only
-make controller     # Start PC controller only
-make update-docs    # Show which docs need updating based on git changes
-make git-check      # Pre-work safety check (branch, status, conflicts)
-make lint-py        # Run flake8 on Python modules
-make ui-build       # Build React UI for production
+python tasks.py setup       # Install all dependencies (first time)
+python tasks.py start       # Start full system
+python tasks.py stop        # Stop all services
+python tasks.py restart     # Stop + start
+python tasks.py test        # Run E2E integration test (system must be running)
+python tasks.py git-check   # Pre-work safety check (branch, status, conflicts)
+python tasks.py update-docs # Show which docs need updating based on git changes
 ```
 
 ---
