@@ -1,0 +1,18 @@
+{
+  "backend": "dummy_ids_peak_metadata",
+  "assignment_mode": "exact_user_id",
+  "cameras": [
+    {
+      "role": "TOP",
+      "user_id": "TOP"
+    },
+    {
+      "role": "BOTTOM",
+      "user_id": "BOTTOM"
+    }
+  ],
+  "role_keywords": {
+    "TOP": ["TOP", "UPPER"],
+    "BOTTOM": ["BOTTOM", "LOWER"]
+  }
+}

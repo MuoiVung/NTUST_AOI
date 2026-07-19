@@ -1,0 +1,21 @@
+{
+  "backend": "sim",
+  "cameras": [
+    {
+      "role": "TOP",
+      "device_id": "SIM_TOP",
+      "user_id": "TOP",
+      "width": 1920,
+      "height": 1200,
+      "fps": 10
+    },
+    {
+      "role": "BOTTOM",
+      "device_id": "SIM_BOTTOM",
+      "user_id": "BOTTOM",
+      "width": 1920,
+      "height": 1200,
+      "fps": 10
+    }
+  ]
+}

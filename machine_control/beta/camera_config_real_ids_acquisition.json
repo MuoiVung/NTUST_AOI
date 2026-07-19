@@ -1,0 +1,23 @@
+{
+  "backend": "ids_peak_acquisition",
+  "assignment_mode": "exact_user_id",
+  "cset_path": "new3990.cset",
+  "pipeline_settings_json": "pipeline_config_20260506.json",
+  "image_extension": "png",
+  "timeout_ms": 1000,
+  "save_numpy": false,
+  "cameras": [
+    {
+      "role": "TOP",
+      "user_id": "TOP"
+    },
+    {
+      "role": "BOTTOM",
+      "user_id": "BOTTOM"
+    }
+  ],
+  "role_keywords": {
+    "TOP": ["TOP", "UPPER"],
+    "BOTTOM": ["BOTTOM", "LOWER"]
+  }
+}
